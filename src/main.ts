@@ -1,17 +1,29 @@
-import { identity } from './math/matrix4';
-import { worldToCamera } from './math/camera4d';
-import { projectPoint } from './math/projection4d';
+﻿import { identity } from './math/matrix4';
+import type { Vec4 } from './math/vec4';
+import { createTesseract } from './geometry/tesseract';
+import { createSimplex4D } from './geometry/simplex4d';
+import { createRoom4D } from './geometry/room4d';
+import { projectGeometry } from './projection/projectedGeometry';
+import { createMainView } from './renderer/mainView';
 import './style.css';
 
-const cameraPoint = worldToCamera([1, 2, 3, 2], { position: [0, 0, 0, -2], rotation: identity() });
-const projected = projectPoint(cameraPoint, { focalLength: 2, near: 0.1, far: 20 });
-document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-  <p class="eyebrow">4D SPACE LAB · PHASE 1</p>
-  <h1>4次元空間の可視化</h1>
-  <p>数学基盤を実装しました。幾何描画・操作UI・断面表示は後続phaseで追加します。</p>
-  <section><h2>座標変換のサンプル</h2>
-    <p>世界座標 (1, 2, 3, 2) ／ カメラ位置 (0, 0, 0, −2) ／ 回転なし</p>
-    <p>カメラ座標：(${cameraPoint.join(', ')})</p>
-    <p>焦点距離 2 → 3D投影：(${projected?.join(', ')})</p>
-    <code>p_camera = R(p − c) → q = f / w_c · (x_c, y_c, z_c)</code>
-  </section>`;
+const camera4d = { position: [0, 0, 0, -3] as Vec4, rotation: identity() };
+const projection = { focalLength: 3, near: 2, far: 12 };
+const simplex = createSimplex4D();
+const objects = [
+  { name: 'Room', color: 0x526888, showVertices: false, polytope: createRoom4D(5) },
+  { name: 'Tesseract', color: 0x63e8d2, showVertices: true, polytope: createTesseract(1.8, [-1.4, 0, 0, 1]) },
+  { name: '4-simplex', color: 0xffbb70, showVertices: true, polytope: {
+    ...simplex, vertices: simplex.vertices.map((v): Vec4 => [v[0] + 1.4, v[1], v[2], v[3] + 1]),
+  } },
+].map(({ polytope, ...display }) => ({ ...display, geometry: projectGeometry(polytope, camera4d, projection) }));
+
+document.querySelector<HTMLElement>('#app')!.innerHTML = `
+  <header><p class="eyebrow">4D SPACE LAB · PHASE 3A</p><h1>4D Projection <span>／ Wireframe</span></h1>
+  <p>4D world → camera → near/far clipping → 3D projection</p></header>
+  <section class="viewport" id="main-view"></section>
+  <footer><div class="legend">${objects.map(o => `<span style="color:#${o.color.toString(16).padStart(6, '0')}">${o.name} · ${o.geometry.vertices.length} projected vertices / ${o.geometry.edges.length} edges${o.showVertices ? '' : '（辺のみ表示）'}</span>`).join('')}</div>
+  <p>3D表示カメラ：ドラッグでorbit ／ ホイールでzoom ／ 右ドラッグでpan</p>
+  <p>4Dカメラは固定：位置 (0, 0, 0, −3)、回転なし、f = 3、near = 2、far = 12。表示操作は4Dカメラに影響しません。</p></footer>`;
+const dispose = createMainView(document.querySelector<HTMLElement>('#main-view')!, objects);
+if (import.meta.hot) import.meta.hot.dispose(dispose);

@@ -450,3 +450,9 @@ README.mdに、
 # 初期実装の規約と範囲
 Phase 1はVite起動基盤、独自4D数学、点投影、数学テスト。後続phaseはREADME参照。ユーザーの明示指示まで開始しない。
 合成順の未指定部分には、XY→XZ→XW→YZ→YW→ZWを順に適用する初期規約を採用した。行優先行列・列ベクトル・ラジアンとし、正角は各面の第1軸を第2軸へ回す。
+
+# Phase 3Aの設計範囲
+頂点・辺のみをworld→4D camera coordinates→camera-space wによるnear/far clipping→4D perspective projection→Three.js Main Viewの順に処理する。可視範囲はnear < w <= farを維持する。
+projection層はrendererから独立した純粋関数と独自Vec3の投影データを使用する。Three.jsへ渡すのは計算済み3D座標のみ。
+OrbitControlsは3D表示カメラ専用であり、4Dカメラの状態を変更しない。Roomは辺表示、tesseractとsimplexは頂点・辺表示とする。
+Faces/Cells塗りつぶし、操作UI、Projected-volume Sliceは後続phase。Phase 3B以降は明示指示まで開始しない。
