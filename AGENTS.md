@@ -436,7 +436,11 @@ README.mdに、
 を記述する。
 
 # 作業・利用量方針
-通常実装はGPT-5.6 Terra / mediumを基本とする。難しい数学・設計だけSol / mediumまたはhigh、軽作業はLuna / lowまたはmedium。xhigh/max/ultraは原則使用しない。モデル設定を変更できない場合は変更したと報告しない。
+- 通常の新規実装: GPT-6 Astra / Light
+- 数学・計算幾何など難しい問題: 必要な場合のみ Astra / Medium または GPT-5.6 Sol / Medium
+- CSS、README、lint、単純修正などの軽作業: より軽量なモデルを使用してよい
+- モデル設定をCodex自身で変更できない場合、変更したとは報告しない
+- 不必要にreasoningを上げない
 必要なファイルだけ読み、不要な依存・大規模リファクタリング・将来機能を追加しない。変更に関連するtargeted testを優先し、phase完了時にfull test/buildを行う。同じ検証を理由なく繰り返さない。
 一度にv0.1全体を実装せず、指定phase完了で停止する。結果・変更ファイル・テスト・残課題を簡潔に報告する。
 数学仕様が曖昧なら曖昧な点・採用案・代替案を短く提示し、4D camera/projection/sliceの定義を勝手に変更しない。
