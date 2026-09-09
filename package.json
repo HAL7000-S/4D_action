@@ -1,0 +1,6 @@
+{
+  "name": "four-dimensional-space", "version": "0.1.0", "private": true, "type": "module",
+  "scripts": { "dev": "vite --host 127.0.0.1", "build": "tsc --noEmit && vite build", "test": "vitest run" },
+  "dependencies": { "three": "^0.166.1" },
+  "devDependencies": { "@types/three": "^0.166.0", "typescript": "~5.9.3", "vite": "^8.1.4", "vitest": "^4.0.0" }
+}
