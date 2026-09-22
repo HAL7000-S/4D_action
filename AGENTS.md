@@ -455,4 +455,21 @@ Phase 1はVite起動基盤、独自4D数学、点投影、数学テスト。後�
 頂点・辺のみをworld→4D camera coordinates→camera-space wによるnear/far clipping→4D perspective projection→Three.js Main Viewの順に処理する。可視範囲はnear < w <= farを維持する。
 projection層はrendererから独立した純粋関数と独自Vec3の投影データを使用する。Three.jsへ渡すのは計算済み3D座標のみ。
 OrbitControlsは3D表示カメラ専用であり、4Dカメラの状態を変更しない。Roomは辺表示、tesseractとsimplexは頂点・辺表示とする。
-Faces/Cells塗りつぶし、操作UI、Projected-volume Sliceは後続phase。Phase 3B以降は明示指示まで開始しない。
+Phase 3A時点ではFaces/Cells塗りつぶし、操作UI、Projected-volume Sliceは後続phaseとした。
+
+# Phase 3Bの設計範囲
+4Dカメラの世界座標position、6回転角、focalLength/near/farをUIとキーボードで操作する。内部角はradian、UIはdegreeで明示変換する。回転定義・合成順は変更しない。
+4D状態変更時にカメラ変換→クリッピング→投影を再計算し、Three.jsの描画バッファを更新する。OrbitControlsと4D状態は完全に独立する。
+room/tesseract/simplexを個別に表示切替できる。roomの見栄えを理由に投影座標をclampしない。
+Reset 4D Cameraは位置・全角度・投影設定を既定値へ戻す。Reset Viewは3D表示カメラのみを戻す。
+Faces/Cells、transparency、Projected-volume Slice、スマートフォンUI完成には進まない。Phase 3C以降は明示指示まで開始しない。
+
+# Phase 3C：3D観察空間（従来のOrbit操作方針を更新）
+4D数学・回転合成・geometry・near/far clippingを維持する。
+パイプラインは4D World→4D Camera→4D Perspective Projection→3D Projection Volume→3D Observer Room→First-person Three.js Camera→2D monitor。
+Projection Volumeは独立したh stateを持つ原点中心の[-h,h]^3。FOV4D=2 atan(h/f)。投影座標はclampしない。今回は枠と描画用クリップ面を導入し、正確な3D幾何クリッピングは後続。
+observerRoom3Dは既存4D Roomと別の大きな3D部屋。カメラだけをroom bounds内へclampし、Projection Volumeとのcollisionは行わない。
+デスクトップはPointerLockControls、W/S前後、A/D左右、Q/E上下、mouse look。4D操作はJ/L、I/K、U/O、N/M、[/]面選択、;/\'回転。キー割当はinputMapping.tsへ集約。
+スマートフォンはPointer Eventsで空きcanvasをdrag look、左下3D移動・右下4D操作。ページはスクロールせず全画面canvas、右overlay panelのみ縦scroll。
+4D Camera、Projection Volume、3D Observer Cameraのstateは分離。Reset 4D CameraとReset 3D Observerも独立する。
+Faces/Cells、Slice、physics、string、PVTS、VR、backendには進まない。Phase完了で停止。

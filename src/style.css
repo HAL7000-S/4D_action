@@ -1,10 +1,33 @@
-﻿:root { font-family: system-ui, sans-serif; color: #e3ebf7; background: #101722; line-height: 1.6; }
-body { margin: 0; }
-main { max-width: 1440px; padding: 24px; margin: auto; }
-.eyebrow { color: #7cd9cf; letter-spacing: .15em; font-size: .75rem; }
-h1 { margin: 4px 0; font-size: 1.8rem; }
-h1 span { font-weight: 400; color: #a6b8cd; }
-header p, footer p { margin: 8px 0; color: #a6b8cd; font-size: .85rem; }
-.viewport { height: 64vh; min-height: 360px; border: 1px solid #344254; border-radius: 8px; overflow: hidden; }
-canvas { display: block; }
-.legend { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 16px; font-size: .85rem; }
+﻿:root { font-family: system-ui, sans-serif; color: #e3ebf7; background: #101722; line-height: 1.4; }
+* { box-sizing: border-box; }
+html, body, #app { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+#app { position: fixed; inset: 0; height: 100dvh; }
+.viewport { position: absolute; inset: 0; touch-action: none; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+header { position: absolute; top: 12px; left: 16px; max-width: calc(100% - 350px); pointer-events: none; font-size: .8rem; text-shadow: 0 1px 3px #000; }
+header p { margin: 4px 0; }
+.panel { position: absolute; right: 12px; top: 12px; width: 300px; max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; border: 1px solid #526888; border-radius: 8px; padding: 12px; background: #172131; }
+summary { cursor: pointer; font-weight: bold; }
+h2 { margin: 10px 0; font-size: 1rem; }
+fieldset { margin: 0 0 10px; border: 1px solid #344254; border-radius: 4px; padding: 8px; }
+legend { font-size: .85rem; color: #a6b8cd; }
+label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 4px 0; font-size: .85rem; }
+input, select, button { font: inherit; color: #e3ebf7; background: #101722; border: 1px solid #526888; border-radius: 4px; padding: 6px; }
+input[type=number] { width: 130px; min-width: 0; }
+button { cursor: pointer; margin: 2px; font-size: .8rem; touch-action: none; }
+:focus-visible { outline: 2px solid #63e8d2; outline-offset: 2px; }
+.panel p, output { font-size: .75rem; overflow-wrap: anywhere; }
+output { display: block; white-space: pre-line; color: #a6b8cd; }
+.error, #volume-error { color: #ffbb70; }
+#touch-controls { display: none; }
+@media (pointer: coarse), (max-width: 800px) {
+  header { top: 8px; left: 8px; max-width: calc(100% - 100px); font-size: .65rem; }
+  .panel { top: 8px; right: 8px; width: min(280px, 75vw); max-height: 48dvh; padding: 8px; }
+  .panel:not([open]) { width: auto; }
+  #touch-controls { display: block; }
+  .pad { position: absolute; bottom: max(8px, env(safe-area-inset-bottom)); display: grid; gap: 2px; width: min(43vw, 230px); padding: 4px; background: #172131; border-radius: 8px; touch-action: none; }
+  .pad strong { grid-column: 1 / -1; font-size: .7rem; }
+  .pad3d { left: 8px; grid-template-columns: repeat(2, 1fr); }
+  .pad4d { right: 8px; grid-template-columns: repeat(2, 1fr); }
+  .pad button { min-height: 34px; margin: 0; font-size: .7rem; }
+}
