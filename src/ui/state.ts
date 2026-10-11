@@ -4,7 +4,7 @@ import type { Projection4D } from '../math/projection4d';
 import type { Polytope4D } from '../geometry/polytope4d';
 import { projectPlayerWorld, playerViewCamera, type PlayerDimension, type ViewMode } from '../projection/playerCamera';
 import { dimensionWorld } from '../geometry/playerGeometry';
-import { filterBackCells, type VisibilityMode } from '../visibility/backCell';
+import { filterBackBoundaries, type VisibilityMode } from '../visibility/backCell';
 
 export const axes = ['x', 'y', 'z', 'w'] as const;
 export const objectIds = ['room', 'tesseract', 'simplex'] as const;
@@ -15,6 +15,7 @@ export interface PlayerCamera {
   position: Vec4;
   angles: RotationAngles;
   tpsLookAngles: RotationAngles;
+  groundForward?: Vec4;
   projection: Projection4D;
   visible: Record<ObjectId, boolean>;
   visibilityMode: VisibilityMode;
@@ -51,7 +52,7 @@ export function projectScene(objects: readonly { id: ObjectId; polytope: Polytop
   return objects.map(object => {
     const polytope = state.dimension === 4 ? object.polytope : dimensionWorld(object.id, state.dimension);
     return { id: object.id, geometry: state.visible[object.id]
-      ? filterBackCells(polytope, projectPlayerWorld(polytope, state), playerCamera.position,
-        object.id === 'room' || state.dimension !== 4 ? 'XRay' : state.visibilityMode) : { vertices: [], edges: [] } };
+      ? filterBackBoundaries(polytope, projectPlayerWorld(polytope, state), playerCamera.position,
+        object.id === 'room' ? 'XRay' : state.visibilityMode, state.dimension) : { vertices: [], edges: [] } };
   });
 }

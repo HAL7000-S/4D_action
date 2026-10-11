@@ -68,3 +68,23 @@ it('scene toggles visibility without affecting room and preserves mode on reset'
   expect(natural[0].geometry.edges).toHaveLength(12); expect(natural[1]).toEqual(xray[1]);
   expect(resetCamera(naturalState).visibilityMode).toBe('Natural');
 });
+
+it.each([2,3] as const)('culls intrinsic %iD boundaries and retains room/mode', async dimension => {
+  const { dimensionWorld,playerShape } = await import('../src/geometry/playerGeometry');
+  const { filterBackBoundaries } = await import('../src/visibility/backCell');
+  const { projectPlayerWorld } = await import('../src/projection/playerCamera');
+  const { setDimension } = await import('../src/ui/state');
+  const shape = playerShape(dimension,2), state = setDimension(defaultState(),dimension);
+  const projected = projectPlayerWorld(shape,state);
+  const camera: Vec4 = dimension===2 ? [0,-3,0,0] : [0,0,-3,0];
+  const result = filterBackBoundaries(shape,projected,camera,'Natural',dimension);
+  expect(result.edges.length).toBeLessThanOrEqual(dimension===2 ? 1 : 4);
+  expect(filterBackBoundaries(shape,projected,[0,0,0,0],'Natural',dimension).edges).toHaveLength(0);
+  const objects = [{id:'room' as const,polytope:shape},{id:'tesseract' as const,polytope:shape},{id:'simplex' as const,polytope:shape}];
+  const xray = projectScene(objects,state), culled = projectScene(objects,{...state,visibilityMode:'Natural'});
+  expect(culled[0]).toEqual(xray[0]);
+  expect(culled[1].geometry.edges.length).toBeLessThan(xray[1].geometry.edges.length);
+  expect(culled[2].geometry.edges.length).toBeLessThan(xray[2].geometry.edges.length);
+  expect(setDimension({...state,visibilityMode:'Natural'},4).visibilityMode).toBe('Natural');
+  expect(dimensionWorld('simplex',dimension).vertices.length).toBe(dimension+1);
+});

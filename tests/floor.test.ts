@@ -103,15 +103,16 @@ describe('ground input and independent TPS orbit', () => {
     expect(moved.tpsLookAngles).toEqual(looked.tpsLookAngles);
     const displacement = moved.position.map((v,i) => v - looked.position[i]);
     const length = Math.hypot(...displacement), forward = playerPose(moved).rotation[dimension-1];
-    forward.forEach((v,i) => expect(v).toBeCloseTo(displacement[i] / length, 12));
+    if (dimension === 2) forward.forEach((v,i) => expect(v).toBeCloseTo(displacement[i] / length, 12));
+    else { expect(forward.reduce((sum,v,i) => sum+v*displacement[i]/length,0)).toBeGreaterThan(0); expect(moved.angles).not.toEqual(looked.angles); }
     expect(moved.position[1]).toBe(looked.position[1]);
     expect(advanceCamera(moved, new Set(), .1, [20,30], 'camera4d').angles).toEqual(moved.angles);
   });
-  it('uses E/D z, S/F x, A/Z w; reserves Space and ignores absent axes', () => {
+  it('uses camera forward and the independent fourth-dimensional horizontal axis', () => {
     expect(playerCodes).toEqual({ forward: 'KeyE', back: 'KeyD', left: 'KeyS', right: 'KeyF', negativeW: 'KeyA', positiveW: 'KeyZ', jump: 'Space' });
     for (const dimension of [2,3,4] as const) {
       const state = setDimension(defaultState(), dimension);
-      for (const [key, axis, sign] of [[playerCodes.left,0,-1], [playerCodes.right,0,1], [playerCodes.forward,2,1], [playerCodes.back,2,-1], [playerCodes.negativeW,3,-1], [playerCodes.positiveW,3,1]] as const) {
+      for (const [key, axis, sign] of [[playerCodes.left,0,-1], [playerCodes.right,0,1], [playerCodes.forward,dimension === 2 ? 0 : dimension-1,1], [playerCodes.back,dimension === 2 ? 0 : dimension-1,-1], [playerCodes.negativeW,dimension === 4 ? 2 : 4,-1], [playerCodes.positiveW,dimension === 4 ? 2 : 4,1]] as const) {
         const moved = advanceCamera(state, new Set([key]), .25, [0,0], 'camera4d');
         const expected = [...state.position]; if (axis < dimension) expected[axis] += sign * .5;
         expect(moved.position).toEqual(expected);

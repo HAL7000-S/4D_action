@@ -1,24 +1,15 @@
-## Goal
+## Result
 
-床表示の小phase：TPS本体と視点の分離、地面内移動、2D/3D/4D床タイルの表示確認。
+* Camera-relative ground movement, Observer ESDF, time-based TPS facing, JIS/US bracket shortcuts, independent CONTROL/DIMENSION/VIEW HUD and TV h/FOV labels implemented.
+* Back-face Culling supports 2D edges / 3D faces / existing 4D cells. Saved Natural mode remains compatible. Room/floor/Player policies remain unchanged.
+* Validation: npm test passed (10 files / 107 tests); npm run build passed, with the existing >500 kB chunk warning (about 511 kB).
 
-## State
+## Constraints
 
-* 完了: TPS mouse orbitを本体姿勢から分離。本体は移動入力時だけ地面内の移動方向へ向く。
-* 完了: PlayerはESDFとA/Zでx/z/w移動、yは固定、Spaceは予約。Observer操作は維持。
-* 完了: safe青/hazard赤の床専用geometry・clip・Mesh。4Dはy一定の8頂点6面cell、wの異なる2層に6タイル。低次元はsegment/square。
-* 検証: npm test（10 files / 100 tests）とnpm run build成功。6つの次元/視点で床投影がTV内に入ることをテスト。
-* 制約: 実ブラウザ接続がなく目視・実機touch確認は未実施。buildは約508 kBのchunkサイズ警告あり。深度clip面の蓋・厳密4D遮蔽は未実装。
-
-## Relevant
-
-* `src/ui/inputMapping.ts`
-* `src/projection/playerCamera.ts`
-* `src/geometry/floorTile.ts`
-* `src/projection/projectFloor.ts`
-* `tests/floor.test.ts`
+* 3D Solid and exact 4D occlusion remain unimplemented. Correct 3D occlusion needs preserved camera depth beyond the existing planar projection.
+* Live browser, Pointer Lock, JIS hardware and touch verification not performed.
 
 ## Next
 
-1. 実ブラウザで各Dimension/Viewを選び、Reset Player → Look at floorから表示とTPS orbitを確認する。
-2. 今回の範囲で停止。gravity/jump、床・hazard判定、death/restart、goal等は次の明示依頼まで実装しない。
+* Verify Dimension/View combinations, bracket shortcuts after Controls clicks, Pointer Lock and touch on actual devices.
+* Stop at the requested scope; no jump, collision or game progression.

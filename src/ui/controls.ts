@@ -9,20 +9,20 @@ export function createControls(panel: HTMLElement, viewport: HTMLElement, onChan
   let state = defaultState();
   const field = (group: string, name: string, step: number) => `<label>${name}<input type="number" step="${step}" data-group="${group}" name="${name}"></label>`;
   panel.innerHTML = `<h2>PlayerCamera</h2>
-    <fieldset><legend>Dimension</legend>${[2,3,4].map(d => `<button type="button" data-dimension="${d}">${d}D</button>`).join('')}</fieldset>
-    <fieldset><legend>View</legend>${['fps','tps'].map(v => `<button type="button" data-view="${v}">${v.toUpperCase()}</button>`).join('')}<p>TPS: front boundary red / other boundaries blue</p></fieldset>
+    <fieldset><legend>PlayerDimension</legend>${[2,3,4].map(d => `<button type="button" data-dimension="${d}">${d}D</button>`).join('')}</fieldset>
+    <fieldset><legend>ViewMode</legend>${['fps','tps'].map(v => `<button type="button" data-view="${v}">${v.toUpperCase()}</button>`).join('')}<p>TPS: front boundary red / other boundaries blue</p></fieldset>
     <fieldset><legend>Position（世界座標）</legend>${axes.map(a => field('position', a, .1)).join('')}</fieldset>
     <button type="button" id="floor-preview">Look at floor</button><p>Floor: blue = safe / red = hazard (display only)</p>
     <fieldset><legend>Rotation（degree）</legend>${planes.map(p => field('rotation', p, 1)).join('')}</fieldset>
     <fieldset><legend>Projection</legend>${['focalLength', 'near', 'far'].map(p => field('projection', p, .1)).join('')}</fieldset>
     <fieldset><legend>Visibility</legend>
     <label>X-Ray<input type="radio" name="visibility-mode" value="XRay" data-group="mode"></label>
-    <label>Natural (4D objects)<input type="radio" name="visibility-mode" value="Natural" data-group="mode"></label>
+    <label>Back-face Culling<input type="radio" name="visibility-mode" value="Natural" data-group="mode"></label>
     ${objectIds.map(id => `<label>${id}<input type="checkbox" name="${id}" data-group="visible"></label>`).join('')}</fieldset>
     <p class="error" role="status" id="input-error"></p>
     <button type="button" id="reset-camera">Reset Player</button>
     <button type="button" id="reset-view">Reset Observer</button>
-    <fieldset><legend>Player keys</legend>
+    <p>X-Ray: all wireframe. Back-face Culling: rear edges (2D), faces (3D), cells (4D) removed; no occlusion.</p><fieldset><legend>InputMode / keys</legend><p>Observer3D: ESDF; Space / Shift: up / down</p>
     <p id="player-keys">Slash: Observer / Player; [ / ]: dimension; V: FPS / TPS<br>Player: ESDF, A/Z; Space reserved</p></fieldset>
     <output id="camera-diagnostic"></output>`;
   const inputs = Array.from(panel.querySelectorAll<HTMLInputElement>('input'));
@@ -45,7 +45,7 @@ export function createControls(panel: HTMLElement, viewport: HTMLElement, onChan
     }
     panel.querySelectorAll<HTMLButtonElement>('[data-dimension]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.dimension) === state.dimension)));
     panel.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === state.viewMode)));
-    panel.querySelector('#player-keys')!.textContent = `Slash: Observer / Player; [ / ]: dimension; V: FPS / TPS. S/F: left/right; ${state.dimension >= 3 ? 'E/D: forward/back; ' : ''}${state.dimension === 4 ? 'A/Z: local -w/+w; ' : ''}Space: reserved. Mouse: ${state.viewMode === 'tps' ? 'TPS orbit only' : 'FPS look'}`;
+    panel.querySelector('#player-keys')!.textContent = `Slash: Observer / Player; [ / ]: dimension; V: FPS / TPS. S/F: left/right; ${state.dimension >= 3 ? 'E/D: camera forward/back; ' : 'E/D: +x/-x; '}${state.dimension === 4 ? 'A/Z: camera local -z/+z; ' : ''}Space: reserved. Mouse: ${state.viewMode === 'tps' ? 'TPS orbit only' : 'FPS look'}`;
     error.textContent = '';
     panel.querySelector<HTMLOutputElement>('#camera-diagnostic')!.textContent =
       `Position (${state.position.map(v => v.toFixed(3)).join(', ')})\n` + planes.map(p => `${p}: ${toDegrees(state.angles[p]).toFixed(2)}°`).join(' / ');

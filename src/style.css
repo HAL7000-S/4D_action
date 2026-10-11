@@ -39,3 +39,5 @@ button:disabled { opacity: .4; }
 @media (pointer: coarse), (max-width: 800px) { .panel { top: 118px; max-height: min(48dvh, calc(100dvh - 126px)); } }
 
 button[aria-pressed="true"] { border-color: #63e8d2; background: #22483f; color: #fff; }
+
+#input-mode { white-space: pre-line; }

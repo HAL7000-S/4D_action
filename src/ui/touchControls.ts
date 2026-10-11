@@ -8,7 +8,7 @@ export function createTouchControls(root: HTMLElement, input: InputState) {
     ${button('left', 'Left')}${button('right', 'Right')}
     ${button('up', 'Up')}${button('down', 'Down')}</div>
     <div class="pad pad4d"><strong>Player look: drag canvas</strong>
-    ${button('negativeW', '-w')}${button('positiveW', '+w')}</div>`;
+    ${button('negativeW', '-z')}${button('positiveW', '+z')}</div>`;
   const abort = new AbortController(), options = { signal: abort.signal };
   let dimension: PlayerDimension = 4;
   const sync = () => {
@@ -20,7 +20,7 @@ export function createTouchControls(root: HTMLElement, input: InputState) {
       const action = button.dataset.action!;
       button.dataset.code = mapping[action];
       button.disabled = !mapping[action] || (player && (action === 'up' || action === 'down'
-        || (dimension === 2 && (action === 'forward' || action === 'back'))
+
         || (dimension !== 4 && (action === 'negativeW' || action === 'positiveW'))));
       if (action === 'up') button.textContent = player ? 'Jump (reserved)' : 'Up';
     });

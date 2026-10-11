@@ -35,7 +35,7 @@ export function dimensionWorld(id: ObjectId, dimension: 2 | 3): Polytope4D {
       [i === 1 ? 2.2 : 1, (i === 2 ? 1.2 : 0) + (dimension === 2 ? 2.5 : 0), dimension === 3 ? 2.5 + (i === 3 ? 1.2 : 0) : 0, 0]);
     const edges: Edge4D[] = [];
     for (let i = 0; i < vertices.length; i++) for (let j = i + 1; j < vertices.length; j++) edges.push([i,j]);
-    shape = { vertices, edges, faces: [], cells: [] };
+    shape = { vertices, edges, faces: dimension === 3 ? [[0,1,2], [0,1,3], [0,2,3], [1,2,3]] : [], cells: [] };
   } else {
     shape = playerShape(dimension, id === 'room' ? roomHalfExtent * 2 : 1.8);
     if (id !== 'room') shape = { ...shape, vertices: shape.vertices.map(p => [p[0] - 1.4, p[1] + (dimension === 2 ? 2.5 : 0), p[2] + (dimension === 3 ? 2.5 : 0), 0]) };

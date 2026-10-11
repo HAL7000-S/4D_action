@@ -44,7 +44,7 @@ it('independently clamps both walls on every world component', () => {
   for (const axis of [0,2,3]) for (const sign of [-1, 1]) {
     const state = defaultState();
     const position: [number,number,number,number] = [0,0,0,0]; position[axis] = sign * (limit - .01); state.position = position;
-    const keys = [[playerCodes.left,playerCodes.right], [], [playerCodes.back,playerCodes.forward], [playerCodes.negativeW,playerCodes.positiveW]];
+    const keys = [[playerCodes.left,playerCodes.right], [], [playerCodes.negativeW,playerCodes.positiveW], [playerCodes.back,playerCodes.forward]];
     const next = advanceCamera(state, new Set([keys[axis][sign === -1 ? 0 : 1]]), 1, [0,0], 'camera4d');
     expect(next.position[axis]).toBe(sign * limit);
   }
@@ -54,12 +54,12 @@ it('slides along walls instead of rejecting the complete diagonal movement', () 
   const state = defaultState(), limit = roomHalfExtent - roomMargin;
   state.position = [limit,0,0,0];
   const next = advanceCamera(state, new Set([playerCodes.right,playerCodes.forward]), .5, [0,0], 'camera4d');
-  expect(next.position[0]).toBe(limit); expect(next.position[2]).toBeGreaterThan(0);
+  expect(next.position[0]).toBe(limit); expect(next.position[3]).toBeGreaterThan(0);
 });
 it('clamps rotated local movement in world coordinates', () => {
   const state = defaultState(), limit = roomHalfExtent - roomMargin;
   state.position = [limit - .01,0,0,0]; state.angles.XW = Math.PI / 4;
-  const next = advanceCamera(state, new Set([playerCodes.positiveW]), 1, [0,0], 'camera4d');
+  const next = advanceCamera(state, new Set([playerCodes.forward]), 1, [0,0], 'camera4d');
   expect(next.position[0]).toBe(limit); expect(next.position[3]).toBeGreaterThan(0);
   next.position.forEach(v => expect(Math.abs(v)).toBeLessThanOrEqual(limit));
 });

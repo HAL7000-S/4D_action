@@ -59,3 +59,29 @@ export function filterBackCells(polytope: Polytope4D, projected: ProjectedGeomet
   return { vertices: projected.vertices.filter(v => vertices.has(v.sourceVertexIndex)),
     edges: projected.edges.filter(e => edges.has(e.sourceEdgeIndex)) };
 }
+
+/** Intrinsic convex edge/face culling; Room, floor and avatar retain their own policies. */
+export function filterBackBoundaries(polytope: Polytope4D, projected: ProjectedGeometry, camera: Vec4, mode: VisibilityMode, dimension: 2 | 3 | 4): ProjectedGeometry {
+  if (dimension === 4) return filterBackCells(polytope, projected, camera, mode);
+  if (mode === 'XRay') return projected;
+  const center = [0,1,2,3].map(a => polytope.vertices.reduce((sum,v) => sum+v[a]/polytope.vertices.length,0)) as unknown as Vec4;
+  const boundaries = dimension === 2 ? polytope.edges : polytope.faces;
+  const vertices = new Set<number>(), edges = new Set<number>();
+  for (const boundary of boundaries) {
+    const point = polytope.vertices[boundary[0]], u = sub(polytope.vertices[boundary[1]],point);
+    let normal: Vec4;
+    if (dimension === 2) normal = [u[1],-u[0],0,0];
+    else {
+      const v = sub(polytope.vertices[boundary[2]],point);
+      normal = [u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0],0];
+    }
+    const length = Math.hypot(...normal);
+    if (!(length > 1e-12) || !Number.isFinite(length)) continue;
+    normal = normal.map(x => x/length) as unknown as Vec4;
+    if (dot(normal,sub(center,point)) > 0) normal = normal.map(x => -x) as unknown as Vec4;
+    if (!isCellVisible({ normal,point,d: dot(normal,point) },camera)) continue;
+    boundary.forEach(v => vertices.add(v));
+    polytope.edges.forEach(([a,b],i) => { if (boundary.includes(a) && boundary.includes(b)) edges.add(i); });
+  }
+  return { vertices: projected.vertices.filter(v => vertices.has(v.sourceVertexIndex)), edges: projected.edges.filter(e => edges.has(e.sourceEdgeIndex)) };
+}

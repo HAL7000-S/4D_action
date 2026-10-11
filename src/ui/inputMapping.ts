@@ -8,34 +8,78 @@ import type { CameraState } from './state';
 export const speeds = { observer: 5, camera4d: 2, mouse: .002 }; // units/sec, rad/pixel
 export const codes = {
   toggle: 'Slash', dimensionDown: 'BracketLeft', dimensionUp: 'BracketRight', toggleView: 'KeyV',
-  left: 'KeyA', right: 'KeyD', forward: 'KeyW', back: 'KeyS',
-  up: 'Space', down: ['ShiftLeft', 'ShiftRight'], negativeZ: 'KeyQ', positiveZ: 'KeyE',
+  left: 'KeyS', right: 'KeyF', forward: 'KeyE', back: 'KeyD',
+  up: 'Space', down: ['ShiftLeft', 'ShiftRight'],
 } as const;
-// Player bindings are separate from the unchanged Observer bindings above.
+// Input owner selects Observer or Player behavior for the shared ESDF keys.
 export const playerCodes = {
   forward: 'KeyE', back: 'KeyD', left: 'KeyS', right: 'KeyF',
   negativeW: 'KeyA', positiveW: 'KeyZ', jump: 'Space',
 } as const;
 export function playerMovement(pressed: ReadonlySet<string>, dimension: 2 | 3 | 4): Vec4 {
   const has = (code: string) => Number(pressed.has(code));
-  return [has(playerCodes.right) - has(playerCodes.left), 0,
-    dimension >= 3 ? has(playerCodes.forward) - has(playerCodes.back) : 0,
-    dimension === 4 ? has(playerCodes.positiveW) - has(playerCodes.negativeW) : 0];
+  const forward = has(playerCodes.forward) - has(playerCodes.back);
+  return [has(playerCodes.right) - has(playerCodes.left) + (dimension === 2 ? forward : 0), 0,
+    dimension === 3 ? forward : dimension === 4 ? has(playerCodes.positiveW) - has(playerCodes.negativeW) : 0,
+    dimension === 4 ? forward : 0];
 }
-/** Minimal facing: align the body's forward row with ground displacement, without smoothing. */
-function faceMovement(state: CameraState, direction: Vec4): RotationAngles {
-  const [x, , z, w] = direction;
-  if (state.dimension === 2) return { ...state.angles, XY: x > 0 ? Math.PI / 2 : -Math.PI / 2 };
-  if (state.dimension === 3) return { ...state.angles, XY: 0, YZ: 0, XZ: Math.atan2(x, z) };
-  return { XY: 0, XZ: 0, YZ: 0, YW: 0, XW: Math.atan2(x, w), ZW: Math.atan2(z, Math.hypot(x, w)) };
+export const facingResponse = 10;
+const dot = (a: Vec4, b: Vec4) => a.reduce((sum, v, i) => sum + v * b[i], 0);
+const unit = (v: Vec4): Vec4 => v.map(x => x / Math.hypot(...v)) as unknown as Vec4;
+/** Optical forward projected onto the ground, with a saved pole fallback. */
+export function groundBasis(state: CameraState, look: RotationAngles): Vec4[] {
+  const r = composeRotation(activeAngles(state, look));
+  const ground = (v: readonly number[]): Vec4 => [v[0], 0, state.dimension >= 3 ? v[2] : 0, state.dimension === 4 ? v[3] : 0];
+  let forward = ground(r[state.dimension - 1]);
+  if (Math.hypot(...forward) < 1e-8) forward = ground(state.groundForward ?? [0,0,0,0]);
+  if (Math.hypot(...forward) < 1e-8) forward = state.dimension === 3 ? [0,0,1,0] : [0,0,0,1];
+  forward = unit(forward);
+  const orthogonal = (v: Vec4, basis: Vec4[]) => basis.reduce((out, b) => out.map((x,i) => x - dot(out,b)*b[i]) as unknown as Vec4, v);
+  let right = orthogonal(ground(r[0]), [forward]);
+  if (Math.hypot(...right) < 1e-8) {
+    right = [0,2,3].map(i => orthogonal(ground([0,1,2,3].map(a => Number(a === i))), [forward])).sort((a,b) => Math.hypot(...b)-Math.hypot(...a))[0];
+  }
+  right = unit(right);
+  if (state.dimension === 3) return [right, [0,0,0,0], forward, [0,0,0,0]];
+  // Complete the oriented horizontal frame in (x,z,w).
+  const third: Vec4 = [forward[2]*right[3]-forward[3]*right[2], 0,
+    forward[3]*right[0]-forward[0]*right[3], forward[0]*right[2]-forward[2]*right[0]];
+  return [right, [0,0,0,0], third, forward];
+}
+function faceMovement(state: CameraState, direction: Vec4, dt: number): RotationAngles {
+  const target = unit(direction), alpha = -Math.expm1(-facingResponse * dt);
+  if (state.dimension === 2) return { ...state.angles, XY: target[0] > 0 ? Math.PI / 2 : -Math.PI / 2 };
+  if (state.dimension === 3) {
+    const yaw = Math.atan2(target[0], target[2]);
+    const delta = Math.atan2(Math.sin(yaw-state.angles.XZ), Math.cos(yaw-state.angles.XZ));
+    return { ...state.angles, XY: 0, YZ: 0, XZ: state.angles.XZ + alpha*delta };
+  }
+  const angles = { ...state.angles, XY: 0, YZ: 0, YW: 0 };
+  const r = composeRotation(angles), from = r[3];
+  let axis: Vec4 = [from[2]*target[3]-from[3]*target[2],0,from[3]*target[0]-from[0]*target[3],from[0]*target[2]-from[2]*target[0]];
+  const cosine = Math.max(-1, Math.min(1, dot(from,target)));
+  if (Math.hypot(...axis) < 1e-8) {
+    if (cosine > 0) return angles;
+    axis = r[0]; // deterministic minimal half-turn at the antipode
+  }
+  axis = unit(axis);
+  const theta = Math.acos(cosine)*alpha, c = Math.cos(theta), sn = Math.sin(theta);
+  const rows = r.map(v => {
+    const cross = [axis[2]*v[3]-axis[3]*v[2],0,axis[3]*v[0]-axis[0]*v[3],axis[0]*v[2]-axis[2]*v[0]];
+    return v.map((x,i) => x*c + cross[i]*sn + axis[i]*dot(axis,v)*(1-c));
+  });
+  const b = Math.asin(Math.max(-1, Math.min(1, -rows[0][3])));
+  const pole = Math.abs(Math.cos(b)) < 1e-8;
+  return { ...angles, XW: b, XZ: pole ? 0 : Math.atan2(-rows[0][2],rows[0][0]),
+    ZW: pole ? Math.atan2(rows[3][2],rows[2][2]) : Math.atan2(-rows[2][3],rows[3][3]) };
 }
 export function movement(pressed: ReadonlySet<string>) {
   const has = (code: string) => Number(pressed.has(code));
   return [has(codes.right) - has(codes.left), has(codes.up) - Number(codes.down.some(c => pressed.has(c))),
-    has(codes.positiveZ) - has(codes.negativeZ), has(codes.forward) - has(codes.back)] as const;
+    0, has(codes.forward) - has(codes.back)] as const;
 }
 export function advanceCamera(state: CameraState, pressed: ReadonlySet<string>, dt: number, mouse: readonly [number, number], mode: InputMode): CameraState {
-  if (mode !== 'camera4d') return state;
+  if (mode !== 'camera4d' || !Number.isFinite(dt) || !mouse.every(Number.isFinite) || !Object.values(state.viewMode === 'tps' ? state.tpsLookAngles : state.angles).every(Number.isFinite)) return state;
   const tps = state.viewMode === 'tps';
   const previousLook = tps ? state.tpsLookAngles : state.angles;
   const look = { ...previousLook };
@@ -46,18 +90,15 @@ export function advanceCamera(state: CameraState, pressed: ReadonlySet<string>, 
   let position = state.position;
   const move = playerMovement(pressed, state.dimension);
   if (dt > 0 && move.some(v => v !== 0)) {
-    // Ground movement uses the view's horizontal orientation only. Pitch/roll cannot move y.
-    const horizontal = activeAngles(state, look);
-    horizontal.XY = horizontal.YZ = horizontal.YW = 0;
-    const r = composeRotation(horizontal);
+    const basis = state.dimension === 2 ? [[1,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0]] : groundBasis(state, look);
     const scale = speeds.camera4d * dt / Math.max(1, Math.hypot(...move));
-    const direction = [0,1,2,3].map(axis => r.reduce((sum, row, i) => sum + row[axis] * move[i], 0)) as unknown as Vec4;
+    const direction = [0,1,2,3].map(axis => basis.reduce((sum, row, i) => sum + row[axis] * move[i], 0)) as unknown as Vec4;
     position = constrainCameraPosition(state.position.map((v, axis) => v + direction[axis] * scale) as unknown as Vec4);
-    if (tps) angles = faceMovement(state, direction);
+    if (tps) angles = faceMovement(state, direction, dt);
   }
   const lookChanged = Object.keys(look).some(p => look[p as keyof RotationAngles] !== previousLook[p as keyof RotationAngles]);
   if (position === state.position && !lookChanged) return state;
-  return { ...state, position, angles, tpsLookAngles: tps ? look : state.tpsLookAngles };
+  return { ...state, position, angles, tpsLookAngles: tps ? look : state.tpsLookAngles, groundForward: state.dimension >= 3 ? groundBasis(state, look)[state.dimension - 1] : state.groundForward };
 }
 
 export type PlayerAction = 'dimensionDown' | 'dimensionUp' | 'toggleView';
@@ -82,7 +123,7 @@ export function createInputModel() {
     keyDown(code: string, repeat = false, editing = false) {
       if (editing) return;
       const action = playerActions.find(a => codes[a] === code);
-      if (action) { if (!repeat && !keyboard.has(code)) { clear(); keyboard.add(code); actions.forEach(fn => fn(action)); } return; }
+      if (action) { if (!repeat && !keyboard.has(code)) { keyboard.add(code); actions.forEach(fn => fn(action)); } return; }
       if (code === codes.toggle) { if (!repeat && !keyboard.has(code)) { toggle(); keyboard.add(code); } }
       else keyboard.add(code);
     },
@@ -95,20 +136,26 @@ export function createInputModel() {
 }
 export type InputState = ReturnType<typeof createInputModel>;
 
+export function shortcutCode(code: string, key: string): string {
+  if (key === '[') return codes.dimensionDown;
+  if (key === ']') return codes.dimensionUp;
+  return code;
+}
 export function createInputState(viewport: HTMLElement) {
   const state = createInputModel();
   const abort = new AbortController(), options = { signal: abort.signal };
   const editing = (target: EventTarget | null) => target instanceof HTMLElement
-    && (target.isContentEditable || !!target.closest('input,select,textarea,button,[contenteditable]:not([contenteditable="false"])'));
+    && (target.isContentEditable || !!target.closest('input,select,textarea,[contenteditable]:not([contenteditable="false"])'));
   const down = (e: KeyboardEvent) => {
-    if (e.isComposing || e.metaKey || editing(e.target)) return;
-    const allowed: readonly string[] = [...playerActions.map(a => codes[a]), codes.toggle, codes.left, codes.right, codes.forward, codes.back, codes.up, ...codes.down, codes.negativeZ, codes.positiveZ, ...Object.values(playerCodes)];
-    if (!allowed.includes(e.code)) return;
-    if (e.code !== codes.toggle && !document.pointerLockElement && !viewport.contains(document.activeElement)) return;
-    e.preventDefault(); state.keyDown(e.code, e.repeat);
+    if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey || editing(e.target)) return;
+    const code = shortcutCode(e.code, e.key);
+    const allowed: readonly string[] = [...playerActions.map(a => codes[a]), codes.toggle, codes.left, codes.right, codes.forward, codes.back, codes.up, ...codes.down, ...Object.values(playerCodes)];
+    if (!allowed.includes(code)) return;
+    if (![codes.toggle, ...playerActions.map(a => codes[a])].includes(code as typeof codes.toggle) && !document.pointerLockElement && !viewport.contains(document.activeElement)) return;
+    e.preventDefault(); state.keyDown(code, e.repeat);
   };
   window.addEventListener('keydown', down, options);
-  window.addEventListener('keyup', e => state.keyUp(e.code), options);
+  window.addEventListener('keyup', e => state.keyUp(shortcutCode(e.code, e.key)), options);
   window.addEventListener('blur', state.clear, options);
   document.addEventListener('visibilitychange', state.clear, options);
   document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement) state.clear(); }, options);
