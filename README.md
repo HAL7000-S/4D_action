@@ -1,125 +1,89 @@
 # 4D Space Lab
 
-Vite + TypeScript + Three.js を使用するブラウザ向け4次元空間可視化プロジェクト。
-現在は **Phase 3B：4Dカメラ操作** まで実装済みです。
+2D / 3D / 4Dの世界をPlayerCameraで移動・観察し、その透視像を3DのProjectionTVに表示する実験環境です。TVを見るObserverは独立した3Dカメラです。Vite + TypeScript + Three.jsを使用し、バックエンドはありません。
 
-## 実行
+## Setup
 
-Node.js 22.12以上（検証環境24.15）を使用します。
+Node.js 22.12以上を使用します。
 
-```sh
+```bash
 npm install
-npm run dev
-npm test
-npm run build
 ```
 
-dev起動後に表示されるローカルURLを開いてください。tesseractは緑、4-simplexは橙の頂点・辺、roomは青灰色の辺で表示します。
-ドラッグで3D表示カメラをorbit、ホイールでzoom、右ドラッグでpanできます。4Dカメラは操作パネルまたはキーボードで変更し、OrbitControlsとは独立しています。
-buildの出力は `dist/`。相対base設定により静的配信のサブディレクトリに対応します。公開作業は未実施です。
+## Usage
 
-## 数学的規約
+```bash
+npm run dev
+```
 
-- 世界座標は `(x,y,z,w)`、4Dカメラのローカル視線は `+w`。
-- `p_camera = R(p-c)`。Rはworld-to-cameraのSO(4)行列で、カメラのローカル軸を世界へ変換する行列ではありません。
-- 独自4×4行列は行優先、ベクトルは列ベクトル。同次座標やThree.js Matrix4は使いません。
-- 正角は各面の第1軸を第2軸へ回します。角度はラジアン。
-- 合成順はXY → XZ → XW → YZ → YW → ZW。列ベクトルに対して後の回転を左から乗算します。
-- `q = (f/w_c)(x_c,y_c,z_c)`。有限な `f > 0` と `0 < near < far` を要求します。
-- 点の可視範囲は `near < w_c <= far`。範囲外、非有限値、投影結果のオーバーフローは `null`。
-- 辺は4Dカメラ座標でnear/farクリッピングしてから点投影します。面・cellのクリッピングは未実装です。
-- 3D表示カメラは4Dカメラから独立させます。
+表示されたローカルURLを開きます。初期状態は4D FPS、入力先はObserverです。HUDは「入力先 / Player次元 / FPS・TPS」を示します。
 
-## 幾何データ（Phase 2）
+| 操作 | 内容 |
+| --- | --- |
+| Canvasクリック / Esc | Pointer Lock開始 / 解除 |
+| `/` (`Slash`) | 入力先Observer / Player切替 |
+| `[` / `]` | Player次元を下げる / 上げる（2〜4） |
+| `V` | PlayerのFPS / TPS切替 |
+| Observer: WASD、Space / Shift | 前後左右、上 / 下 |
+| Player: S / F | 左 / 右（local −x / +x、全次元） |
+| Player: E / D | forward / backward（local +z / −z、3D・4Dのみ） |
+| Player: A / Z | local −w / +w（4Dのみ） |
+| Player: Space | jump用予約、現時点では無動作 |
+| Player: mouse | FPSは従来のlook、TPSは本体と独立したorbit |
 
-geometry層はVec4の型のみ参照し、Three.js・DOM・数学処理に依存しません。
-`Polytope4D`はvertices、edges、faces、cellsを保持します。辺は2頂点index、面は周回順の頂点index、cellは頂点indexとpolytope全体の面indexを持ちます。面の周回方向はcell外向きの向きを保証しません。
+移動とPlayer切替キーはCanvasにフォーカスがあるかPointer Lock中に使用します。入力欄・ボタン操作中はショートカットを捕捉しません。位置と角度を直接編集でき、角度のUI単位はdegreeです。非アクティブな軸・回転欄は値を保存したまま無効になります。
 
-- `createTesseract(size = 2, center = [0,0,0,0])`：16頂点・32辺・24正方形面・8立方体cell。各座標はcenter ± size/2。
-- `createSimplex4D()`：5頂点・10辺・10三角形面・5四面体cell。重心は原点、外接半径1、全辺長√(5/2)の正4単体。
-- `createRoom4D(L = 5)`：[-L,L]⁴の境界。8立方体cellそれぞれに `boundary: { axis, sign }` を付与。描画時の色割当にはこのmetadataを利用できます。
+ControlsのDimension / Viewボタンでも6状態を選択できます。スマートフォンではControlsを開いて切り替え、Canvasのドラッグで視線、ボタン長押しで移動します。左下のObserver / Playerボタンは入力先だけを変更します。使用しない移動ボタンは無効になります。
 
-sizeとLは正の有限値、centerは有限座標を要求します。通常の浮動小数点精度の範囲で使用してください。
+TPSのPlayerはsquare / cube / tesseractのワイヤーフレームです。前方の境界（edge / face / cubic cell）の辺を赤、残りを青で表示し、共有辺は赤を優先します。FPSではPlayerを表示しません。シーンの緑・橙の物体とは別geometryです。
 
-## Wireframe投影（Phase 3A）
+床確認にはDimension/Viewを選び、Reset Player → Look at floorを押します。青はsafe、赤はhazardで、判定はありません。4Dはw区間が異なる2層の床配置をA/Zで移動して比較できます。2D FPSの初期視線は+yで床は−y側にあるため、Look at floorで下へ向けます。TPS本体の姿勢は移動入力時だけ更新し、mouseやLook at floorでは回転しません（TPS中の本体角度欄は読取専用）。
 
-`projectGeometry(geometry, camera, settings)`は世界座標→4Dカメラ変換→wによるクリッピング→透視投影の順に処理します。
-`ProjectedGeometry`の頂点は `position: Vec3` と `sourceVertexIndex`、辺は `start/end: Vec3` と `sourceEdgeIndex` を保持します。交点は辺の端点として保持し、元の頂点リストには追加しません。
+Reset PlayerとReset Observerは独立しています。Visibilityは部屋・物体を個別に切替可能です。Naturalは4D物体のback-cell cullingで、2D/3Dの表示はX-Rayです。選択値は次元変更でも保存します。
 
-`clipSegment4D(a, b, near, far)`はカメラ座標の線分を受け取り、元の向きを保つ端点ペアまたは `null` を返す純粋関数です。
-nearは開境界なので、その直後のIEEE 754浮動小数点値をクリップ面として交点計算します。farは境界を含みます。一定wは除算せず判定し、微小な非ゼロ分母の交差も処理します。非有限入力は `null`、無効なnear/far設定は `RangeError` です。
-数値精度を超える極端な座標では形状精度は保証しませんが、非有限な結果は投影データに含めません。
+## Development
 
-初期4Dカメラはroom内部の `(0,0,0,-3)`、回転なし、f=3、near=2、far=12。Roomのw方向の辺はnearを横切り、クリップされます。
-Main Viewは計算済みの3D座標だけを受け取り、Three.jsのPointsとLineSegmentsで描画します。リサイズ時・表示カメラ操作時に再描画し、破棄時はGPUリソースとイベントを解放します。
-Faces/Cellsの塗りつぶし、Sliceは未実装です。
+```bash
+# Test
+npm test
+# Production build
+npm run build
+# Debug / Run
+npm run dev
+```
 
-## 4Dカメラ操作（Phase 3B）
+lint scriptはありません。ビルド出力は`dist/`です。相対base設定によりGitHub Pages等のサブディレクトリで静的配信できます。
 
-操作パネルのPosition x/y/z/wは世界座標のカメラ位置です。Rotationの6面はdegree入力で、UI境界でradianへ変換します。数学層の回転定義・合成順は変更していません。
-focalLength/near/farも数値入力で変更でき、有効値を入力すると即座にカメラ変換→クリッピング→投影を再計算します。無効な数値や `0 < near < far` を満たさない入力では説明を表示し、直前の有効状態を維持します。
-Visibilityでroom/tesseract/simplexを個別に切り替えられます。roomをOFFにすると内部オブジェクトだけを観察できます。投影座標のclampは行いません。
-
-キーボード操作はMain ViewをクリックするかTabでフォーカスしたときだけ有効です。
-
-- `M`：Position / Rotationモード切替。
-- `[` / `]`：移動軸または回転面を順番に切替。
-- `↑` / `↓`：選択軸を±0.1移動、または選択面を±5°回転。長押しはOSのキーリピートに従います。
-- 対象はパネルのMode/Axis/Planeでも選択可能。数値入力中・修飾キー付き操作は捕捉しません。
-
-キー配置は `src/ui/controls.ts` の `keyBindings` に集約しています。XY/XZ/YZとXW/YW/ZWを切り替えて、wを含む回転による遠近変化を比較できます。
-パネル下部に有効な4D位置・全回転角、Main View下部に表示対象ごとの可視頂点数・辺数を表示します。roomの頂点数は投影可能な頂点数で、描画は辺のみです。
-
-`Reset 4D Camera`：位置 `(0,0,0,-3)`、6角度0、f=3、near=2、far=12へ戻します。初期値はPhase 3Aから変更していません。Visibilityと3D表示カメラは維持します。
-`Reset View`：3D表示カメラの初期orbit/zoom/panだけを戻し、4D状態を維持します。
-世界geometryとThree.js scene・camera・materialを再利用し、投影変更時はBufferGeometryの属性・draw rangeを更新します。容量不足時だけGPU属性を再確保します。
-
-## 構成とphase
+## Structure
 
 ```text
-src/main.ts                 初期scene・4Dカメラ・Main View接続
-src/style.css               基本スタイル
-src/math/vec4.ts             ベクトル
-src/math/matrix4.ts          独自4×4行列
-src/math/rotation4d.ts       6面回転と合成
-src/math/camera4d.ts         世界→カメラ座標
-src/math/projection4d.ts     カメラ座標→3D点
-src/geometry/polytope4d.ts  幾何データ型
-src/geometry/tesseract.ts   超立方体生成
-src/geometry/simplex4d.ts   正4単体生成
-src/geometry/room4d.ts      部屋境界とmetadata
-src/projection/clip4d.ts    カメラ座標での4D線分クリッピング
-src/projection/projectedGeometry.ts  頂点・辺の投影データと変換
-src/renderer/mainView.ts    Three.js wireframe・独立したOrbitControls
-src/vite-env.d.ts           Viteクライアント型
-src/ui/state.ts             4D状態・単位変換・Reset・scene投影
-src/ui/controls.ts          操作パネル・フォーカス限定キーボード操作
-tests/math.test.ts          数学の単体テスト
-tests/geometry.test.ts      幾何・接続関係の単体テスト
-tests/projection.test.ts    クリッピング・投影パイプラインのテスト
-tests/state.test.ts         状態・単位変換・Reset・投影再計算テスト
-AGENTS.md                  恒久仕様・作業方針
+src/math/                    独自4D数学（Three.js・DOM非依存）
+src/geometry/                世界・Player形状の頂点と境界
+src/projection/              カメラ変換、深度clip、透視像、TPS像、基底軸
+src/visibility/              4D convex back-cell culling
+src/ui/state.ts              PlayerCamera状態とscene投影
+src/ui/inputMapping.ts       入力所有者・キー定義・連続移動
+src/ui/observerState.ts      ProjectionTVとObserverの設定
+src/renderer/               計算済み3D像、Observer、独立HUDの描画
+tests/                      数学・投影・状態・入力のテスト
 ```
 
-1. 起動・数学基盤（完了）
-2. tesseract / simplex / room の明示的な幾何データとテスト（完了）
-3. A：辺クリッピング・投影、Three.js wireframe Main View（完了）。B：4Dカメラ操作・Visibility・独立Reset（完了）。3C以降は明示指示後
-4. Projected-volume Sliceと専用2Dビュー
-5. 表示階層・スマートフォン操作の仕上げと全体検証
+## Design
 
-後続phaseは明示的な依頼後に開始します。最終仕様はAGENTS.mdを参照してください。
+```text
+Player world → PlayerCamera → ProjectionTV
+→ Observer3D → ObserverCamera3D → 2D monitor
+```
 
-## Phase 3C：Observer Room（現在の操作）
-
-従来のOrbit操作を一人称観察へ置き換えました。4D数学・4D初期状態は変更していません。
-白青のcube frameはProjection Volume（初期h=4）、大きな部屋と床gridはobserverRoom3D（各軸±16）です。4D Roomは従来の投影対象であり、この観察室とは別物です。
-hは独立stateとしてpanelで変更可能（0<h<15.8）。FOV4D=2 atan(h/f)をdegree表示します。4D投影後、物体materialに6枚の描画用clip planeを設定し、Volume外の描画を切り取ります。元の投影座標・ProjectedGeometryは変更しません。CPU上の正確な3D幾何切断は未実装で、頂点・辺数はVolume切断前の投影数です。
-
-- Desktop：canvasをクリックしてPointer Lock。Escで解除してpanel操作。W/S前後、A/D左右、Q/E上下、mouse look。前後左右は床面に平行。3D observerだけを部屋境界から0.2内側へ制限し、Volume内部には自由に入れます。
-- 4D：J/L=x −/+、I/K=y +/−、U/O=z −/+、N/M=w −/+。[/]で回転面、;/'で−/+5°。移動は1入力0.1。数値panelも即時更新。キー定義はsrc/ui/inputMapping.ts。
-- Touch：canvas空き領域dragでlook、左下ボタン長押しで3D移動、右下ボタンtapで4D移動・面変更・回転。Controlsを開くと詳細panelを操作できます。
-- ページ全体は100dvhで固定しスクロールしません。panelだけ縦scroll可能です。
-- Reset 4D Cameraは4Dパラメータのみ初期化。Reset 3D Observerは位置(8,5,11)と原点を見る向きへ戻します。hはどちらでも維持します。
-
-追加ファイル：renderer/observerCamera.ts、ui/inputMapping.ts、ui/observerState.ts、ui/touchControls.ts、tests/observer.test.ts。
-Phase 3C完了後、Faces/Cells・Projected-volume Slice・正確な3D幾何クリッピングなどは次の明示指示まで開始しません。
+- `PlayerDimension = 2 | 3 | 4`、`ViewMode = "fps" | "tps"`、入力所有者`InputMode`は独立です。互換名`camera4d`は低次元でもPlayer入力を意味します。次元変更は末尾の世界軸を非アクティブ化し、保存位置・使用しない角度を上書きしません。
+- 4D座標は`(x,y,z,w)`、前方は`+w`、`p_camera = R(p-c)`、`R ∈ SO(4)`。独自行優先行列・列ベクトル・radianを使い、正角は各面の第1軸を第2軸へ回します。合成順はXY → XZ → XW → YZ → YW → ZWです。
+- 4D透視投影は`q = (f/w_c)(x_c,y_c,z_c)`、`f > 0`、`0 < near < far`。辺をカメラ座標でclipしてから投影し、可視範囲は`near < w_c <= far`。開境界・非有限値の扱いは既存数学を維持します。
+- 低次元は独立したsquare/cube roomとcube・simplex相当のワイヤーフレーム世界です。2Dは`(x,y)`、前方`+y`、像は`(f*x_c/y_c,0,0)`。3Dは`(x,y,z)`、前方`+z`、像は`(f*x_c/z_c,f*y_c/z_c,0)`。深度を既存clip/projectへ渡すアダプタで処理します。4D世界のsliceではありません。2Dの透視像が線になるのは意図した仕様です。
+- TPSは本体の`angles`と独立した`tpsLookAngles`で、Playerを中心に距離`near + 3`のorbitを行います。TPS開始時にFPS姿勢から視点を初期化します。移動入力時だけ本体の前方を地面内の移動方向へ合わせ、補間は行いません。世界・Player・world axes・床は同じ視点で投影し、ObserverCameraは流用しません。near/far次第ではPlayerもclipされます。
+- Reset Playerは全保存位置・角度・投影設定を初期化し、Dimension / ViewMode / Visibilityを維持します。ObserverとTVサイズは変更しません。
+- ProjectionTVは原点中心`[-h,h]^3`、`FOV = 2 atan(h/f)`。投影座標はclampせず、6枚の描画clip面で表示領域を制限します。Observer Roomは別の3D部屋で、Observerだけを境界内へ制限します。TVとのcollisionはありません。
+- Player移動は視点の地面内回転（XZ/XW/ZWのみ）の`R^T`でlocal→worldへ変換します。自由度は2D=x、3D=x/z、4D=x/z/w、yは将来のgravity/jump用に保持します。4Dの光学的前方+wと、E/Dの移動軸±zは別です。各世界成分の`[-4.9,4.9]`制限（RoomのL=5、margin=.1）、数値入力の境界、dtベース入力、blur/unlock時の押下解除は維持します。
+- 世界の基底軸は原点の±単位軸（X赤・Y緑・Z青・W紫）。真の正端点が可視かつ非退化のときだけ矢印を描きます。右上HUDは同じrenderer内の独立scene/cameraで、`R e_i`、独立投影anchor `(0,0,0,5)`を使用します。Observerの姿勢・TPS距離には依存しません。
+- Naturalは凸4D物体の外向き支持平面`n·p=d`について`n·(c-p0)>epsilon`のcellに属する頂点・辺を残します。内側・接平面では残しません。Room・world axes・HUD・TPS Playerは対象外です。物体間の遮蔽ではありません。将来のcamera-space平面は`n_c=Rn, d_c=d-n·c`です。
+- 床は`FloorTile4D`の`[x0,x1] × {yFloor} × [z0,z1] × [w0,w1]`で、4D tesseractではなく埋め込まれた3D cubic cellです。2Dはsegment、3Dはsquareとして表示します。床専用の投影処理は既存のcamera/near-far clip/perspectiveを使い、投影した6面を三角形化して専用Meshへ渡します。safe=青、hazard=赤。床はNaturalの対象外で、既存物体のVisibility判定は変更しません。
+- 床Mesh以外の汎用solid renderer、厳密な4D occlusion、深度clipで切断した床の蓋、正確なTV境界での幾何切断は未実装です。gravity/jump、床・hazard衝突、death/restart、goal等のgame system、Slice、physics、PVTS、VR、WebGPUへは進みません。

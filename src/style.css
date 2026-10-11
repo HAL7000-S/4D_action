@@ -31,3 +31,11 @@ output { display: block; white-space: pre-line; color: #a6b8cd; }
   .pad4d { right: 8px; grid-template-columns: repeat(2, 1fr); }
   .pad button { min-height: 34px; margin: 0; font-size: .7rem; }
 }
+#input-mode { position: absolute; z-index: 2; top: 82px; left: 16px; padding: 8px 12px; border: 1px solid #63e8d2; border-radius: 6px; background: #101722; color: #63e8d2; font-weight: bold; font-size: .8rem; pointer-events: none; }
+button:disabled { opacity: .4; }
+@media (max-width: 800px) { #input-mode { top: 76px; left: 8px; font-size: .65rem; } }
+/* Reserve the top-right corner for the independent orientation HUD. */
+.panel { top: 170px; max-height: calc(100dvh - 182px); }
+@media (pointer: coarse), (max-width: 800px) { .panel { top: 118px; max-height: min(48dvh, calc(100dvh - 126px)); } }
+
+button[aria-pressed="true"] { border-color: #63e8d2; background: #22483f; color: #fff; }

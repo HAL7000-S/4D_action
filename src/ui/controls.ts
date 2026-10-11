@@ -1,51 +1,63 @@
+import { constrainCameraPosition } from './roomBoundary';
 import { planes, type RotationPlane } from '../math/rotation4d';
 import type { Projection4D } from '../math/projection4d';
-import { axes, objectIds, defaultState, resetCamera, toDegrees, toRadians, validState, type CameraState, type ObjectId } from './state';
+import { axes, objectIds, defaultState, resetCamera, toDegrees, toRadians, validState, type CameraState, type ObjectId, setDimension, setViewMode, lookAtFloor } from './state';
 
-import { inputMapping, acceptsKey } from './inputMapping';
+import { advanceCamera, type InputMode, type PlayerAction } from './inputMapping';
 
 export function createControls(panel: HTMLElement, viewport: HTMLElement, onChange: (state: CameraState) => void, resetView: () => void) {
   let state = defaultState();
-  let plane: RotationPlane = 'XW';
   const field = (group: string, name: string, step: number) => `<label>${name}<input type="number" step="${step}" data-group="${group}" name="${name}"></label>`;
-  panel.innerHTML = `<h2>4D Camera</h2>
+  panel.innerHTML = `<h2>PlayerCamera</h2>
+    <fieldset><legend>Dimension</legend>${[2,3,4].map(d => `<button type="button" data-dimension="${d}">${d}D</button>`).join('')}</fieldset>
+    <fieldset><legend>View</legend>${['fps','tps'].map(v => `<button type="button" data-view="${v}">${v.toUpperCase()}</button>`).join('')}<p>TPS: front boundary red / other boundaries blue</p></fieldset>
     <fieldset><legend>Position（世界座標）</legend>${axes.map(a => field('position', a, .1)).join('')}</fieldset>
+    <button type="button" id="floor-preview">Look at floor</button><p>Floor: blue = safe / red = hazard (display only)</p>
     <fieldset><legend>Rotation（degree）</legend>${planes.map(p => field('rotation', p, 1)).join('')}</fieldset>
     <fieldset><legend>Projection</legend>${['focalLength', 'near', 'far'].map(p => field('projection', p, .1)).join('')}</fieldset>
-    <fieldset><legend>Visibility</legend>${objectIds.map(id => `<label>${id}<input type="checkbox" name="${id}" data-group="visible"></label>`).join('')}</fieldset>
+    <fieldset><legend>Visibility</legend>
+    <label>X-Ray<input type="radio" name="visibility-mode" value="XRay" data-group="mode"></label>
+    <label>Natural (4D objects)<input type="radio" name="visibility-mode" value="Natural" data-group="mode"></label>
+    ${objectIds.map(id => `<label>${id}<input type="checkbox" name="${id}" data-group="visible"></label>`).join('')}</fieldset>
     <p class="error" role="status" id="input-error"></p>
-    <button type="button" id="reset-camera">Reset 4D Camera</button>
-    <button type="button" id="reset-view">Reset 3D Observer</button>
-    <fieldset><legend>4D keys</legend>
-    <label>Plane<select id="key-plane">${planes.map(p => `<option>${p}</option>`).join('')}</select></label>
-    <p>J/L: x ?/+ ? I/K: y +/? ? U/O: z ?/+ ? N/M: w ?/+<br>[ / ]: plane ? ; / ': rotation ?/+</p></fieldset>
+    <button type="button" id="reset-camera">Reset Player</button>
+    <button type="button" id="reset-view">Reset Observer</button>
+    <fieldset><legend>Player keys</legend>
+    <p id="player-keys">Slash: Observer / Player; [ / ]: dimension; V: FPS / TPS<br>Player: ESDF, A/Z; Space reserved</p></fieldset>
     <output id="camera-diagnostic"></output>`;
   const inputs = Array.from(panel.querySelectorAll<HTMLInputElement>('input'));
   const error = panel.querySelector<HTMLElement>('#input-error')!;
-  const planeSelect = panel.querySelector<HTMLSelectElement>('#key-plane')!;
+  let dirty = false, elapsed = 0;
   const sync = () => {
     for (const input of inputs) {
+      if (document.activeElement === input) continue;
       const group = input.dataset.group;
+      input.disabled = group === 'position' ? axes.indexOf(input.name as typeof axes[number]) >= state.dimension
+        : group === 'rotation' ? state.viewMode === 'tps' || [...input.name.toLowerCase()].some(a => axes.indexOf(a as typeof axes[number]) >= state.dimension) : false;
       input.setCustomValidity('');
-      if (group === 'visible') input.checked = state.visible[input.name as ObjectId];
+      if (group === 'mode') input.checked = input.value === state.visibilityMode;
+      else if (group === 'visible') input.checked = state.visible[input.name as ObjectId];
       else {
         const value = group === 'position' ? state.position[axes.indexOf(input.name as typeof axes[number])]
           : group === 'rotation' ? toDegrees(state.angles[input.name as RotationPlane]) : state.projection[input.name as keyof Projection4D];
         input.value = String(Number(value.toPrecision(12)));
       }
     }
+    panel.querySelectorAll<HTMLButtonElement>('[data-dimension]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.dimension) === state.dimension)));
+    panel.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === state.viewMode)));
+    panel.querySelector('#player-keys')!.textContent = `Slash: Observer / Player; [ / ]: dimension; V: FPS / TPS. S/F: left/right; ${state.dimension >= 3 ? 'E/D: forward/back; ' : ''}${state.dimension === 4 ? 'A/Z: local -w/+w; ' : ''}Space: reserved. Mouse: ${state.viewMode === 'tps' ? 'TPS orbit only' : 'FPS look'}`;
     error.textContent = '';
-    planeSelect.value = plane;
     panel.querySelector<HTMLOutputElement>('#camera-diagnostic')!.textContent =
       `Position (${state.position.map(v => v.toFixed(3)).join(', ')})\n` + planes.map(p => `${p}: ${toDegrees(state.angles[p]).toFixed(2)}°`).join(' / ');
   };
-  const commit = (next: CameraState) => { state = next; sync(); onChange(state); };
+  const commit = (next: CameraState) => { state = { ...next, position: constrainCameraPosition(next.position) }; sync(); onChange(state); };
   const input = (event: Event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) return;
     const next: CameraState = { ...state, position: [...state.position], angles: { ...state.angles }, projection: { ...state.projection }, visible: { ...state.visible } };
     const group = target.dataset.group, value = target.valueAsNumber;
-    if (group === 'visible') next.visible[target.name as ObjectId] = target.checked;
+    if (group === 'mode') next.visibilityMode = target.value === 'Natural' ? 'Natural' : 'XRay';
+    else if (group === 'visible') next.visible[target.name as ObjectId] = target.checked;
     else if (group === 'position') {
       const position = [...state.position] as [number, number, number, number];
       position[axes.indexOf(target.name as typeof axes[number])] = value; next.position = position;
@@ -58,44 +70,43 @@ export function createControls(panel: HTMLElement, viewport: HTMLElement, onChan
     // Keep the active input text/caret intact while updating the actual state.
     const draft = target.value;
     commit(next);
-    if (group !== 'visible') target.value = draft;
+    if (group === 'position') target.value = String(state.position[axes.indexOf(target.name as typeof axes[number])]);
+    else if (group !== 'visible' && group !== 'mode') target.value = draft;
   };
-  const select = () => { plane = planeSelect.value as RotationPlane; };
-  const action = (key: string) => {
-    if (key === inputMapping.planeNext || key === inputMapping.planePrevious) {
-      plane = planes[(planes.indexOf(plane) + (key === inputMapping.planeNext ? 1 : 5)) % 6]; sync(); return;
-    }
-    const next = { ...state, angles: { ...state.angles } };
-    const movement = inputMapping.camera4d[key as keyof typeof inputMapping.camera4d];
-    if (movement) {
-      const position = [...state.position] as [number, number, number, number];
-      position[movement[0]] += movement[1] * .1; next.position = position;
-    } else if (key === inputMapping.rotateNegative || key === inputMapping.rotatePositive) {
-      next.angles[plane] += toRadians(key === inputMapping.rotatePositive ? 5 : -5);
-    } else return;
-    if (validState(next)) commit(next);
+  const choose = (event: Event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button');
+    if (button?.dataset.dimension) commit(setDimension(state, Number(button.dataset.dimension) as 2 | 3 | 4));
+    if (button?.dataset.view) commit(setViewMode(state, button.dataset.view as 'fps' | 'tps'));
   };
-  const keyboard = (event: KeyboardEvent) => {
-    if (!acceptsKey(event) || (!document.pointerLockElement && !viewport.contains(document.activeElement))) return;
-    const key = event.key.toLowerCase();
-    if (!(key in inputMapping.camera4d) && ![inputMapping.planeNext, inputMapping.planePrevious, inputMapping.rotateNegative, inputMapping.rotatePositive].some(k => k === key)) return;
-    event.preventDefault(); action(key);
-  };
+  const floorPreview = () => commit(lookAtFloor(state));
+  panel.querySelector('#floor-preview')!.addEventListener('click', floorPreview);
+  panel.addEventListener('click', choose);
   const focus = () => viewport.focus({ preventScroll: true });
   const reset = () => commit(resetCamera(state));
   viewport.tabIndex = 0;
-  viewport.setAttribute('aria-label', 'Main View。Mで移動・回転切替、角括弧で対象切替、上下矢印で4Dカメラ操作');
+  viewport.setAttribute('aria-label', 'ProjectionTV: Slash = Observer / Player, brackets = dimension, V = FPS / TPS');
   panel.addEventListener('input', input);
-  panel.addEventListener('change', select);
   panel.querySelector('#reset-camera')!.addEventListener('click', reset);
   panel.querySelector('#reset-view')!.addEventListener('click', resetView);
   viewport.addEventListener('pointerdown', focus);
-  window.addEventListener('keydown', keyboard);
+
   sync(); onChange(state);
-  return { action, dispose() {
-    panel.removeEventListener('input', input); panel.removeEventListener('change', select);
+  return {
+    action(action: PlayerAction) {
+      commit(action === 'toggleView' ? setViewMode(state, state.viewMode === 'fps' ? 'tps' : 'fps')
+        : setDimension(state, Math.max(2, Math.min(4, state.dimension + (action === 'dimensionUp' ? 1 : -1))) as 2 | 3 | 4));
+    },
+    update(dt: number, pressed: ReadonlySet<string>, mouse: readonly [number, number], mode: InputMode) {
+      const next = advanceCamera(state, pressed, dt, mouse, mode);
+      if (next !== state && validState(next)) { state = next; dirty = true; onChange(state); }
+      elapsed += dt;
+      if (dirty && elapsed >= .1) { sync(); dirty = false; elapsed = 0; }
+    }, dispose() {
+    panel.removeEventListener('input', input);
+    panel.removeEventListener('click', choose);
+    panel.querySelector('#floor-preview')!.removeEventListener('click', floorPreview);
     panel.querySelector('#reset-camera')!.removeEventListener('click', reset);
     panel.querySelector('#reset-view')!.removeEventListener('click', resetView);
-    viewport.removeEventListener('pointerdown', focus); window.removeEventListener('keydown', keyboard);
+    viewport.removeEventListener('pointerdown', focus);
   } };
 }

@@ -1,3 +1,7 @@
+import { createFloorView } from './floorView';
+import { createAxisDisplay } from './axisDisplay';
+import type { ProjectedAxis } from '../projection/basisAxes';
+import type { InputState } from '../ui/inputMapping';
 import * as THREE from 'three';
 import { createObserver } from './observerCamera';
 import { observerRoomHalfSize } from '../ui/observerState';
@@ -5,8 +9,8 @@ import type { ProjectedGeometry } from '../projection/projectedGeometry';
 
 export interface ViewObject { geometry: ProjectedGeometry; color: number; showVertices: boolean }
 
-/** Receives only projected 3D coordinates; no 4D camera state. */
-export function createMainView(container: HTMLElement, objects: readonly ViewObject[]) {
+/** Receives only projected 3D coordinates; no 4D PlayerCamera state. */
+export function createMainView(container: HTMLElement, objects: readonly ViewObject[], input: InputState) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setClearColor(0x0b1220);
@@ -41,21 +45,38 @@ export function createMainView(container: HTMLElement, objects: readonly ViewObj
     const lines = new THREE.LineSegments(geometry, material); lines.scale.setScalar(half);
     resources.push(geometry, material); return lines;
   };
-  const volumeFrame = frame(4, 0xc4d8ff); volumeFrame.name = 'projectionVolume'; scene.add(volumeFrame);
+  const volumeFrame = frame(4, 0xc4d8ff); volumeFrame.name = 'projectionTV'; scene.add(volumeFrame);
   const observerRoom3D = new THREE.Group(); observerRoom3D.name = 'observerRoom3D';
   observerRoom3D.add(frame(observerRoomHalfSize, 0x4e6580));
   const grid = new THREE.GridHelper(observerRoomHalfSize * 2, 32, 0x7295ac, 0x293e51);
   grid.position.y = -observerRoomHalfSize; observerRoom3D.add(grid); scene.add(observerRoom3D);
   resources.push(grid.geometry, ...(Array.isArray(grid.material) ? grid.material : [grid.material]));
-  const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 200);
-  const controls = createObserver(camera, renderer.domElement);
-  const render = () => renderer.render(scene, camera);
+  const floorView = createFloorView(scene, clipPlanes);
+  const worldAxes = createAxisDisplay(scene, clipPlanes);
+  const hudScene = new THREE.Scene();
+  const hudAxes = createAxisDisplay(hudScene);
+  const hudCamera = new THREE.OrthographicCamera(-1.6, 1.6, 1.6, -1.6, .1, 30);
+  hudCamera.position.set(3, 2, 4); hudCamera.lookAt(0, 0, 0);
+  const observerCamera = new THREE.PerspectiveCamera(60, 1, 0.05, 200);
+  const controls = createObserver(observerCamera, renderer.domElement, input);
+  const render = () => {
+    const width = container.clientWidth, height = container.clientHeight;
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, width, height);
+    renderer.setClearColor(0x0b1220, 1); renderer.autoClear = true;
+    renderer.render(scene, observerCamera);
+    const size = Math.min(width, height, matchMedia('(max-width: 800px), (pointer: coarse)').matches ? 110 : 160);
+    renderer.setViewport(width - size, height - size, size, size);
+    renderer.setScissor(width - size, height - size, size, size); renderer.setScissorTest(true);
+    renderer.autoClear = false; renderer.clearDepth(); renderer.render(hudScene, hudCamera);
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, width, height); renderer.autoClear = true;
+  };
   let previous = performance.now();
-  renderer.setAnimationLoop((time: number) => { controls.tick(Math.min((time - previous) / 1000, .05)); previous = time; render(); });
+  let updateInput: (dt: number) => void = () => {};
+  renderer.setAnimationLoop((time: number) => { const dt = Math.max(0, Math.min((time - previous) / 1000, .1)); updateInput(dt); controls.tick(dt); previous = time; render(); });
   const resize = () => {
     const width = Math.max(container.clientWidth, 1), height = Math.max(container.clientHeight, 1);
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
+    observerCamera.aspect = width / height;
+    observerCamera.updateProjectionMatrix();
     renderer.setSize(width, height);
     render();
   };
@@ -77,6 +98,9 @@ export function createMainView(container: HTMLElement, objects: readonly ViewObj
     geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), Infinity);
   };
   return {
+    updateFloor: floorView.update,
+    updateAxes(world: readonly (ProjectedAxis | null)[], hud: readonly (ProjectedAxis | null)[]) { worldAxes.update(world); hudAxes.update(hud); },
+    setInputUpdate(update: (dt: number) => void) { updateInput = update; },
     update(geometries: readonly ProjectedGeometry[]) {
       geometries.forEach((geometry, i) => {
         updateBuffer(buffers[i].edges, geometry.edges.flatMap(e => [...e.start, ...e.end]));
@@ -85,14 +109,13 @@ export function createMainView(container: HTMLElement, objects: readonly ViewObj
       render();
     },
     resetView() { controls.reset(); render(); },
-    setObserverAction: controls.setAction,
     setVolume(h: number) {
       volumeFrame.scale.setScalar(h); clipPlanes.forEach(p => { p.constant = h; }); render();
     },
     dispose() {
     observer.disconnect();
     renderer.setAnimationLoop(null);
-    controls.dispose();
+    controls.dispose(); floorView.dispose(); worldAxes.dispose(); hudAxes.dispose();
     resources.forEach(resource => resource.dispose());
     renderer.dispose();
     renderer.domElement.remove();

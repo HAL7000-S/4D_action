@@ -1,21 +1,42 @@
-﻿import { inputMapping, type ObserverAction } from './inputMapping';
+﻿import type { PlayerDimension } from '../projection/playerCamera';
+import { codes, playerCodes, type InputState } from './inputMapping';
 
-export function createTouchControls(root: HTMLElement, action4D: (key: string) => void, observer: (id: string, action?: ObserverAction) => void) {
-  const moves = Object.values(inputMapping.observer);
-  root.innerHTML = `<div class="pad pad3d"><strong>3D Move</strong>${moves.map(action => `<button data-move="${action}">${action}</button>`).join('')}</div>
-  <div class="pad pad4d"><strong>4D Move / Rotate</strong>${Object.entries(inputMapping.camera4d).map(([key, [axis, sign]]) => `<button data-key="${key}">${'xyzw'[axis]}${sign > 0 ? '+' : '−'}</button>`).join('')}
-  <button data-key="${inputMapping.planePrevious}">Plane −</button><button data-key="${inputMapping.planeNext}">Plane +</button>
-  <button data-key="${inputMapping.rotateNegative}">Rotate −</button><button data-key="${inputMapping.rotatePositive.replaceAll("'", '&#39;')}">Rotate +</button></div>`;
+export function createTouchControls(root: HTMLElement, input: InputState) {
+  const button = (action: string, label: string) => `<button data-action="${action}">${label}</button>`;
+  root.innerHTML = `<div class="pad pad3d"><button id="toggle-mode">Observer / Player</button><strong id="touch-mode"></strong>
+    ${button('forward', 'Forward')}${button('back', 'Back')}
+    ${button('left', 'Left')}${button('right', 'Right')}
+    ${button('up', 'Up')}${button('down', 'Down')}</div>
+    <div class="pad pad4d"><strong>Player look: drag canvas</strong>
+    ${button('negativeW', '-w')}${button('positiveW', '+w')}</div>`;
   const abort = new AbortController(), options = { signal: abort.signal };
-  const active = new Set<number>();
+  let dimension: PlayerDimension = 4;
+  const sync = () => {
+    root.querySelector('#touch-mode')!.textContent = input.mode === 'observer3d' ? '3D OBSERVER' : 'PLAYER';
+    const player = input.mode === 'camera4d';
+    const mapping: Record<string, string> = player ? { ...playerCodes, up: playerCodes.jump, down: '' }
+      : { ...codes, down: codes.down[0], negativeW: '', positiveW: '' };
+    root.querySelectorAll<HTMLButtonElement>('[data-action]').forEach(button => {
+      const action = button.dataset.action!;
+      button.dataset.code = mapping[action];
+      button.disabled = !mapping[action] || (player && (action === 'up' || action === 'down'
+        || (dimension === 2 && (action === 'forward' || action === 'back'))
+        || (dimension !== 4 && (action === 'negativeW' || action === 'positiveW'))));
+      if (action === 'up') button.textContent = player ? 'Jump (reserved)' : 'Up';
+    });
+  };
+  const unsubscribe = input.subscribe(sync); sync();
+  root.querySelector('#toggle-mode')!.addEventListener('click', input.toggle, options);
   root.addEventListener('pointerdown', event => {
-    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button');
-    if (!button) return;
-    event.preventDefault(); button.setPointerCapture(event.pointerId); active.add(event.pointerId);
-    if (button.dataset.move) observer(`touch-${event.pointerId}`, button.dataset.move as ObserverAction);
-    else if (button.dataset.key) action4D(button.dataset.key);
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button[data-code]');
+    if (!button || button.disabled) return;
+    event.preventDefault(); button.setPointerCapture(event.pointerId);
+    input.touch(event.pointerId, button.dataset.code);
   }, options);
-  const end = (event: PointerEvent) => { observer(`touch-${event.pointerId}`); active.delete(event.pointerId); };
+  const end = (event: PointerEvent) => input.touch(event.pointerId);
   for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) root.addEventListener(name, end as EventListener, options);
-  return () => { abort.abort(); for (const id of active) observer(`touch-${id}`); };
+  return {
+    setDimension(next: PlayerDimension) { if (dimension !== next) { dimension = next; sync(); } },
+    dispose() { abort.abort(); unsubscribe(); input.clear(); },
+  };
 }

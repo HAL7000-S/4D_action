@@ -1,6 +1,5 @@
-﻿import { expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import { defaultVolume, fov4D, clampObserver, observerRoomHalfSize } from '../src/ui/observerState';
-import { inputMapping } from '../src/ui/inputMapping';
 import { defaultState, resetCamera } from '../src/ui/state';
 
 it('computes the symmetric 4D field of view in radians', () => {
@@ -14,12 +13,6 @@ it('constrains only the observer to the room, with no projection-volume collisio
   expect(clampObserver(-100)).toBe(-observerRoomHalfSize + .2);
   expect(clampObserver(0)).toBe(0);
   expect(clampObserver(2)).toBe(2);
-});
-it('keeps 3D and 4D movement keys disjoint', () => {
-  const keys = Object.keys(inputMapping.observer);
-  expect(Object.keys(inputMapping.camera4d).some(key => keys.includes(key))).toBe(false);
-  expect(inputMapping.camera4d.i).toEqual([1, 1]);
-  expect(inputMapping.camera4d.n).toEqual([3, -1]);
 });
 it('keeps projection volume separate from 4D reset', () => {
   const volume = defaultVolume(); volume.h = 8;
