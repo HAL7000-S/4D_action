@@ -1,3 +1,5 @@
+import { roomGrid, roomColors } from './geometry/roomGrid';
+import { projectPlayerWorld } from './projection/playerCamera';
 import { roomHalfExtent } from './ui/roomBoundary';
 import { floorStage } from './geometry/floorTile';
 import { projectFloor } from './projection/projectFloor';
@@ -42,21 +44,24 @@ const initial = projectScene(objects, defaultState());
 const viewport = document.querySelector<HTMLElement>('#main-view')!;
 const inputState = createInputState(viewport);
 let playerLabel = '4D FPS';
-const updateModeHud = () => { document.querySelector('#input-mode')!.textContent = `CONTROL : ${inputState.mode === 'observer3d' ? 'OBSERVER' : 'PLAYER'}\nDIMENSION : ${playerLabel.split(' ')[0]}\nVIEW : ${playerLabel.split(' ')[1]}\n\n/ Control: Observer / Player\n[ ] Dimension: 2D / 3D / 4D\nV View: FPS / TPS\n${inputState.mode === 'observer3d' ? 'ESDF: move; Space / Shift: up / down' : playerLabel.startsWith('2D') ? 'E/D: +x / -x; S/F: -x / +x' : playerLabel.startsWith('3D') ? 'E/D: forward / back; S/F: left / right' : 'E/D: forward / back; S/F: left / right; A/Z: -z / +z'}`; };
+let motionLabel = 'FREE FLIGHT';
+const updateModeHud = () => { document.querySelector('#input-mode')!.textContent = `CONTROL : ${inputState.mode === 'observer3d' ? 'OBSERVER' : 'PLAYER'}\nDIMENSION : ${playerLabel.split(' ')[0]}\nVIEW : ${playerLabel.split(' ')[1]}\nMOTION : ${motionLabel}\n\n/ Control: Observer / Player\n[ ] Dimension: 2D / 3D / 4D\nV View: FPS / TPS\n${inputState.mode === 'observer3d' ? 'ESDF: move; Space / Shift: up / down' : playerLabel.startsWith('2D') ? 'E/D: +x / -x; S/F: -x / +x' : playerLabel.startsWith('3D') ? 'E/D: forward / back; S/F: left / right' : 'E/D: forward/back; S/F: left/right; A/Z: -z/+z; Up/Down: ZW'}\n${inputState.mode === 'camera4d' ? (motionLabel === 'GRAVITY' ? 'Space: jump' : 'Space/Shift: up/down') : ''}`; };
 const unsubscribeMode = inputState.subscribe(updateModeHud); updateModeHud();
 const touchControls = createTouchControls(document.querySelector('#touch-controls')!, inputState);
-const view = createMainView(viewport, [...objects.map((o, i) => ({ ...o, geometry: initial[i].geometry })), ...[0x3b82f6, 0xef4444].map(color => ({ color, showVertices: false, geometry: { vertices: [], edges: [] } }))], inputState);
+const view = createMainView(viewport, [...objects.map((o, i) => ({ ...o, geometry: initial[i].geometry })), ...[0x3b82f6, 0xef4444].map(color => ({ color, showVertices: false, geometry: { vertices: [], edges: [] } })), ...roomColors.map(color => ({ color, opacity: .35, showVertices: false, geometry: { vertices: [], edges: [] } }))], inputState);
 let lastDiagnostic = 0;
 const controls = createControls(document.querySelector<HTMLElement>('#controls')!, viewport, state => {
   focalLength = state.projection.focalLength;
-  touchControls.setDimension(state.dimension);
+  inputState.setDimension(state.dimension);
+  touchControls.setPlayerState(state.dimension, state.motionMode);
   const projected = projectScene(objects, state);
   const rotation = playerViewCamera(state).rotation;
   view.updateFloor(floorStage(state.dimension).map(tile => projectFloor(tile, state)));
   view.updateAxes(projectPlayerAxes(state, playerViewCamera(state)), projectGizmo(rotation).map((axis, i) => i < state.dimension ? axis : null));
-  view.update([...projected.map(o => o.geometry), ...projectAvatar(state)]);
+  view.update([...projected.map(o => o.id === 'room' ? { vertices: [], edges: [] } : o.geometry), ...projectAvatar(state), ...roomGrid(state.dimension).map(g => state.visible.room ? projectPlayerWorld(g, state) : { vertices: [], edges: [] })]);
   const label = `${state.dimension}D ${state.viewMode.toUpperCase()}`;
-  if (playerLabel !== label) { playerLabel = label; updateModeHud(); }
+  const motion = state.motionMode === 'gravity' ? 'GRAVITY' : 'FREE FLIGHT';
+  if (playerLabel !== label || motionLabel !== motion) { playerLabel = label; motionLabel = motion; updateModeHud(); }
   if (performance.now() - lastDiagnostic >= 100) {
   lastDiagnostic = performance.now(); showFov();
   document.querySelector<HTMLElement>('#counts')!.textContent = projected.map(o =>

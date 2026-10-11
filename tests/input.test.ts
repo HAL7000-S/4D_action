@@ -29,7 +29,7 @@ it('isolates mouse and movement ownership by mode', () => {
   input.toggle(); input.addMouse(30, 40);
   const next = advanceCamera(state, new Set(), .5, input.takeMouse(), input.mode);
   expect(next.angles.XW).toBeCloseTo(30 * speeds.mouse);
-  expect(next.angles.YW).toBeCloseTo(40 * speeds.mouse);
+  expect(next.angles.YW).toBeCloseTo(-40 * speeds.mouse);
   expect(next.angles.XY).toBe(0); expect(next.angles.XZ).toBe(0); expect(next.angles.YZ).toBe(0);
 });
 it('integrates movement and mouse look independently of frame rate', () => {

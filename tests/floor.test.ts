@@ -125,7 +125,7 @@ describe('ground input and independent TPS orbit', () => {
     const state = defaultState(); state.angles.YW = .8; state.angles.YZ = .4;
     const moved = advanceCamera(state, new Set([playerCodes.forward, playerCodes.positiveW]), .5, [20,40], 'camera4d');
     expect(moved.position[1]).toBe(state.position[1]);
-    expect(moved.angles.XW).toBeCloseTo(.04); expect(moved.angles.YW).toBeCloseTo(.88);
+    expect(moved.angles.XW).toBeCloseTo(.04); expect(moved.angles.YW).toBeCloseTo(.72);
     const tps = setViewMode(moved, 'tps');
     expect(tps.tpsLookAngles).toEqual(moved.angles);
     const preview = lookAtFloor(tps); expect(preview.angles).toEqual(tps.angles);

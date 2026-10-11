@@ -1,3 +1,4 @@
+import { advancePlayerMotion } from './playerMotion';
 import { constrainCameraPosition } from './roomBoundary';
 import { composeRotation } from '../math/rotation4d';
 import { activeAngles } from '../projection/playerCamera';
@@ -5,7 +6,7 @@ import type { Vec4 } from '../math/vec4';
 import type { RotationAngles } from '../math/rotation4d';
 import type { CameraState } from './state';
 
-export const speeds = { observer: 5, camera4d: 2, mouse: .002 }; // units/sec, rad/pixel
+export const speeds = { observer: 5, camera4d: 2, mouse: .002, zw: 1 }; // units/sec, rad/pixel
 export const codes = {
   toggle: 'Slash', dimensionDown: 'BracketLeft', dimensionUp: 'BracketRight', toggleView: 'KeyV',
   left: 'KeyS', right: 'KeyF', forward: 'KeyE', back: 'KeyD',
@@ -23,6 +24,7 @@ export function playerMovement(pressed: ReadonlySet<string>, dimension: 2 | 3 | 
     dimension === 3 ? forward : dimension === 4 ? has(playerCodes.positiveW) - has(playerCodes.negativeW) : 0,
     dimension === 4 ? forward : 0];
 }
+export const lookCodes = { positiveZW: 'ArrowUp', negativeZW: 'ArrowDown' } as const;
 export const facingResponse = 10;
 const dot = (a: Vec4, b: Vec4) => a.reduce((sum, v, i) => sum + v * b[i], 0);
 const unit = (v: Vec4): Vec4 => v.map(x => x / Math.hypot(...v)) as unknown as Vec4;
@@ -79,26 +81,30 @@ export function movement(pressed: ReadonlySet<string>) {
     0, has(codes.forward) - has(codes.back)] as const;
 }
 export function advanceCamera(state: CameraState, pressed: ReadonlySet<string>, dt: number, mouse: readonly [number, number], mode: InputMode): CameraState {
-  if (mode !== 'camera4d' || !Number.isFinite(dt) || !mouse.every(Number.isFinite) || !Object.values(state.viewMode === 'tps' ? state.tpsLookAngles : state.angles).every(Number.isFinite)) return state;
+  if (!Number.isFinite(dt) || !mouse.every(Number.isFinite) || !Object.values(state.viewMode === 'tps' ? state.tpsLookAngles : state.angles).every(Number.isFinite)) return state;
+  if (mode !== 'camera4d') return advancePlayerMotion(state, dt, false);
   const tps = state.viewMode === 'tps';
   const previousLook = tps ? state.tpsLookAngles : state.angles;
   const look = { ...previousLook };
-  if (state.dimension === 2) look.XY += mouse[0] * speeds.mouse;
-  else if (state.dimension === 3) { look.XZ += mouse[0] * speeds.mouse; look.YZ += mouse[1] * speeds.mouse; }
-  else { look.XW += mouse[0] * speeds.mouse; look.YW += mouse[1] * speeds.mouse; }
+  const pitch = mouse[1] * speeds.mouse * (state.invertY ? 1 : -1);
+  if (state.dimension === 2) look.XY += mouse[0] * speeds.mouse + pitch;
+  else if (state.dimension === 3) { look.XZ += mouse[0] * speeds.mouse; look.YZ += pitch; }
+  else { look.XW += mouse[0] * speeds.mouse; look.YW += pitch; }
+  if (state.dimension === 4 && dt > 0) look.ZW += (Number(pressed.has(lookCodes.positiveZW)) - Number(pressed.has(lookCodes.negativeZW))) * speeds.zw * dt;
   let angles = tps ? state.angles : look;
   let position = state.position;
   const move = playerMovement(pressed, state.dimension);
-  if (dt > 0 && move.some(v => v !== 0)) {
+  const vertical = state.motionMode === 'flight' ? Number(pressed.has(codes.up)) - Number(codes.down.some(c => pressed.has(c))) : 0;
+  if (dt > 0 && (vertical !== 0 || move.some(v => v !== 0))) {
     const basis = state.dimension === 2 ? [[1,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0]] : groundBasis(state, look);
-    const scale = speeds.camera4d * dt / Math.max(1, Math.hypot(...move));
-    const direction = [0,1,2,3].map(axis => basis.reduce((sum, row, i) => sum + row[axis] * move[i], 0)) as unknown as Vec4;
-    position = constrainCameraPosition(state.position.map((v, axis) => v + direction[axis] * scale) as unknown as Vec4);
-    if (tps) angles = faceMovement(state, direction, dt);
+    const scale = speeds.camera4d * dt / Math.max(1, Math.hypot(...move, vertical));
+    const direction = [0,1,2,3].map(axis => basis.reduce((sum, row, i) => sum + row[axis] * move[i], 0) + (axis === 1 ? vertical : 0)) as unknown as Vec4;
+    position = constrainCameraPosition(state.position.map((v, axis) => v + direction[axis] * scale) as unknown as Vec4, state.dimension);
+    if (tps && move.some(v => v !== 0)) angles = faceMovement(state, [direction[0],0,direction[2],direction[3]], dt);
   }
   const lookChanged = Object.keys(look).some(p => look[p as keyof RotationAngles] !== previousLook[p as keyof RotationAngles]);
-  if (position === state.position && !lookChanged) return state;
-  return { ...state, position, angles, tpsLookAngles: tps ? look : state.tpsLookAngles, groundForward: state.dimension >= 3 ? groundBasis(state, look)[state.dimension - 1] : state.groundForward };
+  if (position === state.position && !lookChanged) return advancePlayerMotion(state, dt, pressed.has(playerCodes.jump));
+  return advancePlayerMotion({ ...state, position, angles, tpsLookAngles: tps ? look : state.tpsLookAngles, groundForward: state.dimension >= 3 ? groundBasis(state, look)[state.dimension - 1] : state.groundForward }, dt, pressed.has(playerCodes.jump));
 }
 
 export type PlayerAction = 'dimensionDown' | 'dimensionUp' | 'toggleView';
@@ -108,6 +114,7 @@ export type InputMode = 'observer3d' | 'camera4d';
 /** DOM-independent state shared by keyboard, touch and the animation loop. */
 export function createInputModel() {
   let mode: InputMode = 'observer3d';
+  let dimension: 2 | 3 | 4 = 4;
   const keyboard = new Set<string>();
   const touches = new Map<number, string>();
   let dx = 0, dy = 0;
@@ -117,6 +124,8 @@ export function createInputModel() {
   const toggle = () => { clear(); mode = mode === 'observer3d' ? 'camera4d' : 'observer3d'; listeners.forEach(fn => fn()); };
   return {
     get mode() { return mode; },
+    get dimension() { return dimension; },
+    setDimension(next: 2 | 3 | 4) { dimension = next; },
     get pressed(): ReadonlySet<string> { return new Set([...keyboard, ...touches.values()]); },
     clear, toggle,
     subscribeAction(fn: (action: PlayerAction) => void) { actions.add(fn); return () => { actions.delete(fn); }; },
@@ -149,8 +158,9 @@ export function createInputState(viewport: HTMLElement) {
   const down = (e: KeyboardEvent) => {
     if (e.isComposing || e.metaKey || e.ctrlKey || e.altKey || editing(e.target)) return;
     const code = shortcutCode(e.code, e.key);
-    const allowed: readonly string[] = [...playerActions.map(a => codes[a]), codes.toggle, codes.left, codes.right, codes.forward, codes.back, codes.up, ...codes.down, ...Object.values(playerCodes)];
+    const allowed: readonly string[] = [...playerActions.map(a => codes[a]), codes.toggle, codes.left, codes.right, codes.forward, codes.back, codes.up, ...codes.down, ...Object.values(playerCodes), ...Object.values(lookCodes)];
     if (!allowed.includes(code)) return;
+    if (Object.values(lookCodes).includes(code as typeof lookCodes.positiveZW) && (state.mode !== 'camera4d' || state.dimension !== 4)) return;
     if (![codes.toggle, ...playerActions.map(a => codes[a])].includes(code as typeof codes.toggle) && !document.pointerLockElement && !viewport.contains(document.activeElement)) return;
     e.preventDefault(); state.keyDown(code, e.repeat);
   };

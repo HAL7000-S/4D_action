@@ -1,3 +1,4 @@
+import { correctPlayerContact, setMotionMode } from './playerMotion';
 import { constrainCameraPosition } from './roomBoundary';
 import { planes, type RotationPlane } from '../math/rotation4d';
 import type { Projection4D } from '../math/projection4d';
@@ -11,6 +12,10 @@ export function createControls(panel: HTMLElement, viewport: HTMLElement, onChan
   panel.innerHTML = `<h2>PlayerCamera</h2>
     <fieldset><legend>PlayerDimension</legend>${[2,3,4].map(d => `<button type="button" data-dimension="${d}">${d}D</button>`).join('')}</fieldset>
     <fieldset><legend>ViewMode</legend>${['fps','tps'].map(v => `<button type="button" data-view="${v}">${v.toUpperCase()}</button>`).join('')}<p>TPS: front boundary red / other boundaries blue</p></fieldset>
+    <fieldset><legend>Player movement</legend>
+    <label>Invert Y<input type="checkbox" name="invertY" data-group="look"></label>
+    <label>Free Flight<input type="radio" name="motion-mode" value="flight" data-group="motion"></label>
+    <label>Gravity<input type="radio" name="motion-mode" value="gravity" data-group="motion"></label></fieldset>
     <fieldset><legend>Position（世界座標）</legend>${axes.map(a => field('position', a, .1)).join('')}</fieldset>
     <button type="button" id="floor-preview">Look at floor</button><p>Floor: blue = safe / red = hazard (display only)</p>
     <fieldset><legend>Rotation（degree）</legend>${planes.map(p => field('rotation', p, 1)).join('')}</fieldset>
@@ -35,7 +40,9 @@ export function createControls(panel: HTMLElement, viewport: HTMLElement, onChan
       input.disabled = group === 'position' ? axes.indexOf(input.name as typeof axes[number]) >= state.dimension
         : group === 'rotation' ? state.viewMode === 'tps' || [...input.name.toLowerCase()].some(a => axes.indexOf(a as typeof axes[number]) >= state.dimension) : false;
       input.setCustomValidity('');
-      if (group === 'mode') input.checked = input.value === state.visibilityMode;
+      if (group === 'look') input.checked = state.invertY;
+      else if (group === 'motion') input.checked = input.value === state.motionMode;
+      else if (group === 'mode') input.checked = input.value === state.visibilityMode;
       else if (group === 'visible') input.checked = state.visible[input.name as ObjectId];
       else {
         const value = group === 'position' ? state.position[axes.indexOf(input.name as typeof axes[number])]
@@ -45,18 +52,20 @@ export function createControls(panel: HTMLElement, viewport: HTMLElement, onChan
     }
     panel.querySelectorAll<HTMLButtonElement>('[data-dimension]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.dimension) === state.dimension)));
     panel.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === state.viewMode)));
-    panel.querySelector('#player-keys')!.textContent = `Slash: Observer / Player; [ / ]: dimension; V: FPS / TPS. S/F: left/right; ${state.dimension >= 3 ? 'E/D: camera forward/back; ' : 'E/D: +x/-x; '}${state.dimension === 4 ? 'A/Z: camera local -z/+z; ' : ''}Space: reserved. Mouse: ${state.viewMode === 'tps' ? 'TPS orbit only' : 'FPS look'}`;
+    panel.querySelector('#player-keys')!.textContent = `Slash: Observer / Player; [ / ]: dimension; V: FPS / TPS. S/F: left/right; ${state.dimension >= 3 ? 'E/D: camera forward/back; ' : 'E/D: +x/-x; '}${state.dimension === 4 ? 'A/Z: camera local -z/+z; ' : ''}${state.dimension === 4 ? 'Up/Down: +ZW/-ZW; ' : ''}Space: ${state.motionMode === 'gravity' ? 'jump (press while grounded)' : 'up; Shift: down'}. Mouse: ${state.viewMode === 'tps' ? 'TPS orbit only' : 'FPS look'}`;
     error.textContent = '';
     panel.querySelector<HTMLOutputElement>('#camera-diagnostic')!.textContent =
       `Position (${state.position.map(v => v.toFixed(3)).join(', ')})\n` + planes.map(p => `${p}: ${toDegrees(state.angles[p]).toFixed(2)}°`).join(' / ');
   };
-  const commit = (next: CameraState) => { state = { ...next, position: constrainCameraPosition(next.position) }; sync(); onChange(state); };
+  const commit = (next: CameraState) => { state = correctPlayerContact({ ...next, position: constrainCameraPosition(next.position, next.dimension) }); sync(); onChange(state); };
   const input = (event: Event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) return;
     const next: CameraState = { ...state, position: [...state.position], angles: { ...state.angles }, projection: { ...state.projection }, visible: { ...state.visible } };
     const group = target.dataset.group, value = target.valueAsNumber;
-    if (group === 'mode') next.visibilityMode = target.value === 'Natural' ? 'Natural' : 'XRay';
+    if (group === 'look') next.invertY = target.checked;
+    else if (group === 'motion') Object.assign(next, setMotionMode(state, target.value === 'gravity' ? 'gravity' : 'flight'));
+    else if (group === 'mode') next.visibilityMode = target.value === 'Natural' ? 'Natural' : 'XRay';
     else if (group === 'visible') next.visible[target.name as ObjectId] = target.checked;
     else if (group === 'position') {
       const position = [...state.position] as [number, number, number, number];
@@ -71,7 +80,7 @@ export function createControls(panel: HTMLElement, viewport: HTMLElement, onChan
     const draft = target.value;
     commit(next);
     if (group === 'position') target.value = String(state.position[axes.indexOf(target.name as typeof axes[number])]);
-    else if (group !== 'visible' && group !== 'mode') target.value = draft;
+    else if (!['visible','mode','motion','look'].includes(group ?? '')) target.value = draft;
   };
   const choose = (event: Event) => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button');

@@ -7,7 +7,7 @@ import { createObserver } from './observerCamera';
 import { observerRoomHalfSize } from '../ui/observerState';
 import type { ProjectedGeometry } from '../projection/projectedGeometry';
 
-export interface ViewObject { geometry: ProjectedGeometry; color: number; showVertices: boolean }
+export interface ViewObject { geometry: ProjectedGeometry; color: number; showVertices: boolean; opacity?: number }
 
 /** Receives only projected 3D coordinates; no 4D PlayerCamera state. */
 export function createMainView(container: HTMLElement, objects: readonly ViewObject[], input: InputState) {
@@ -24,7 +24,7 @@ export function createMainView(container: HTMLElement, objects: readonly ViewObj
   for (const object of objects) {
     const edgeGeometry = new THREE.BufferGeometry();
     edgeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(object.geometry.edges.flatMap(e => [...e.start, ...e.end]), 3));
-    const edgeMaterial = new THREE.LineBasicMaterial({ color: object.color, clippingPlanes: clipPlanes });
+    const edgeMaterial = new THREE.LineBasicMaterial({ color: object.color, transparent: object.opacity !== undefined, opacity: object.opacity ?? 1, depthWrite: object.opacity === undefined, clippingPlanes: clipPlanes });
     scene.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
     resources.push(edgeGeometry, edgeMaterial);
     const entry: { edges: THREE.BufferGeometry; points?: THREE.BufferGeometry } = { edges: edgeGeometry };

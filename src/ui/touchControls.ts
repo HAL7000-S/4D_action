@@ -1,5 +1,6 @@
-﻿import type { PlayerDimension } from '../projection/playerCamera';
-import { codes, playerCodes, type InputState } from './inputMapping';
+import type { MotionMode } from './playerMotion';
+import type { PlayerDimension } from '../projection/playerCamera';
+import { codes, playerCodes, lookCodes, type InputState } from './inputMapping';
 
 export function createTouchControls(root: HTMLElement, input: InputState) {
   const button = (action: string, label: string) => `<button data-action="${action}">${label}</button>`;
@@ -8,21 +9,20 @@ export function createTouchControls(root: HTMLElement, input: InputState) {
     ${button('left', 'Left')}${button('right', 'Right')}
     ${button('up', 'Up')}${button('down', 'Down')}</div>
     <div class="pad pad4d"><strong>Player look: drag canvas</strong>
-    ${button('negativeW', '-z')}${button('positiveW', '+z')}</div>`;
+    ${button('positiveZW', 'ZW +')}${button('negativeZW', 'ZW -')}${button('negativeW', '-z')}${button('positiveW', '+z')}</div>`;
   const abort = new AbortController(), options = { signal: abort.signal };
+  let motionMode: MotionMode = 'flight';
   let dimension: PlayerDimension = 4;
   const sync = () => {
     root.querySelector('#touch-mode')!.textContent = input.mode === 'observer3d' ? '3D OBSERVER' : 'PLAYER';
     const player = input.mode === 'camera4d';
-    const mapping: Record<string, string> = player ? { ...playerCodes, up: playerCodes.jump, down: '' }
+    const mapping: Record<string, string> = player ? { ...playerCodes, ...lookCodes, up: playerCodes.jump, down: motionMode === 'flight' ? codes.down[0] : '' }
       : { ...codes, down: codes.down[0], negativeW: '', positiveW: '' };
     root.querySelectorAll<HTMLButtonElement>('[data-action]').forEach(button => {
       const action = button.dataset.action!;
       button.dataset.code = mapping[action];
-      button.disabled = !mapping[action] || (player && (action === 'up' || action === 'down'
-
-        || (dimension !== 4 && (action === 'negativeW' || action === 'positiveW'))));
-      if (action === 'up') button.textContent = player ? 'Jump (reserved)' : 'Up';
+      button.disabled = !mapping[action] || (player && dimension !== 4 && ['negativeW','positiveW','positiveZW','negativeZW'].includes(action));
+      if (action === 'up') button.textContent = player && motionMode === 'gravity' ? 'Jump' : 'Up';
     });
   };
   const unsubscribe = input.subscribe(sync); sync();
@@ -36,7 +36,7 @@ export function createTouchControls(root: HTMLElement, input: InputState) {
   const end = (event: PointerEvent) => input.touch(event.pointerId);
   for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) root.addEventListener(name, end as EventListener, options);
   return {
-    setDimension(next: PlayerDimension) { if (dimension !== next) { dimension = next; sync(); } },
+    setPlayerState(next: PlayerDimension, motion: MotionMode) { if (dimension !== next || motionMode !== motion) { dimension = next; motionMode = motion; sync(); } },
     dispose() { abort.abort(); unsubscribe(); input.clear(); },
   };
 }

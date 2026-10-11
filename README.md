@@ -28,16 +28,21 @@ npm run dev
 | Player: S / F | 左 / 右（local −x / +x、全次元） |
 | Player: E / D | 2D: +x / −x。3D: カメラ+z / −z。4D: カメラ+w / −w（水平前後） |
 | Player: A / Z | カメラ−z / +z（4Dのみ、前後と独立） |
-| Player: Space | jump用予約、現時点では無動作 |
+| Player: Space / Shift | 自由飛行: 上昇 / 下降。重力: Spaceで接地中にジャンプ（長押し連続ジャンプなし） |
+| Player: ↑ / ↓ | 4DのみZW正 / 逆回転。Zは移動のまま |
 | Player: mouse | FPSは従来のlook、TPSは本体と独立したorbit |
 
 移動キーはCanvasフォーカスまたはPointer Lock中に使用します。入力先・次元・視点の切替はControlsのボタン操作後も使えます。編集可能な入力欄やCtrl/Alt/Meta併用時は捕捉しません。括弧はJISの文字とUSの物理キーに対応します。位置・角度は直接編集でき、角度はdegreeです。非アクティブな値は保持します。
 
 ControlsのDimension / Viewボタンでも6状態を選択できます。スマートフォンではControlsを開いて切り替え、Canvasのドラッグで視線、ボタン長押しで移動します。左下のObserver / Playerボタンは入力先だけを変更します。使用しない移動ボタンは無効になります。
 
+ControlsのPlayer movementでFree Flight（初期値）/ GravityとInvert Y（初期OFF）を選びます。マウス下方向は下向き、反転ONでは上向きです。2DはXY回転に上下ドラッグを反映します。Observerのマウス操作は変更しません。重力は全次元で世界−yへ働き、Player中心と足元を区別した軸平行の当たり判定で外側の床・壁・天井に接触します。既存の青・赤の床タイルは表示専用です。
+
+Player世界の境界は、床が薄青、天井が薄黄、x壁が薄緑、z壁が薄橙、w壁が薄紫です。2Dは境界線、3Dは面上の粗い格子、4Dは超面上の粗い格子を透視投影します。Roomチェックで表示を切り替えます。
+
 TPSのPlayerはsquare / cube / tesseractのワイヤーフレームです。前方の境界（edge / face / cubic cell）の辺を赤、残りを青で表示し、共有辺は赤を優先します。FPSではPlayerを表示しません。シーンの緑・橙の物体とは別geometryです。
 
-床確認にはDimension/Viewを選び、Reset Player → Look at floorを押します。青はsafe、赤はhazardで、判定はありません。4Dはw区間が異なる2層の床配置をA/Zで移動して比較できます。2D FPSの初期視線は+yで床は−y側にあるため、Look at floorで下へ向けます。TPS本体の姿勢は移動入力時だけ更新し、mouseやLook at floorでは回転しません（TPS中の本体角度欄は読取専用）。
+床タイル確認にはDimension/Viewを選び、Reset Player → Look at floorを押します。青はsafe、赤はhazardで、タイルの接触判定はありません。4Dのw区間が異なる2層は初期姿勢のE/Dで移動して比較できます。2D FPSの初期視線は+yなので、Look at floorで下へ向けます。TPS本体の姿勢は水平移動入力時だけ更新し、mouseやLook at floorでは回転しません（本体角度欄は読取専用）。
 
 Reset PlayerとReset Observerは独立しています。VisibilityはX-Ray / Back-face Cullingで、凸物体の前向き境界（2D edge / 3D face / 4D cell）を表示します。Room・床・Playerはカリング対象外です。遮蔽やSolid描画ではありません。選択値は次元変更でも保存します。
 
@@ -84,8 +89,8 @@ Player world → PlayerCamera → ProjectionTV
 - TPS camera orbit and body orientation are independent. Moving turns the body with exponential time-based smoothing: shortest yaw in 3D, minimal rotation within (x,z,w) in 4D. Release holds the current pose. All world/avatar/floor projections share PlayerCamera.
 - Reset Playerは全保存位置・角度・投影設定を初期化し、Dimension / ViewMode / Visibilityを維持します。ObserverとTVサイズは変更しません。
 - ProjectionTVは原点中心`[-h,h]^3`、`FOV = 2 atan(h/f)`。投影座標はclampせず、6枚の描画clip面で表示領域を制限します。Observer Roomは別の3D部屋で、Observerだけを境界内へ制限します。TVとのcollisionはありません。
-- Player移動は視点の地面内回転（XZ/XW/ZWのみ）の`R^T`でlocal→worldへ変換します。自由度は2D=x、3D=x/z、4D=x/z/w、yは将来のgravity/jump用に保持します。4Dの光学的前方+wと、E/Dの移動軸±zは別です。各世界成分の`[-4.9,4.9]`制限（RoomのL=5、margin=.1）、数値入力の境界、dtベース入力、blur/unlock時の押下解除は維持します。
+- 水平移動は視点の光学的前方からyを除き、直交正規化した基底を使います。4DのE/Dは+w/−w、A/Zは−z/+zです。自由飛行は従来の中心位置制限、重力は身体サイズを考慮した境界を使います。接触判定は投影像やObserverではなくPlayer世界で行います。非アクティブな座標は保持します。
 - 世界の基底軸は原点の±単位軸（X赤・Y緑・Z青・W紫）。真の正端点が可視かつ非退化のときだけ矢印を描きます。右上HUDは同じrenderer内の独立scene/cameraで、`R e_i`、独立投影anchor `(0,0,0,5)`を使用します。Observerの姿勢・TPS距離には依存しません。
 - Back-face Culling retains front-facing convex boundary edges; saved Natural values remain compatible. Room, floor and Player are excluded. This does not perform occlusion.
 - 床は`FloorTile4D`の`[x0,x1] × {yFloor} × [z0,z1] × [w0,w1]`で、4D tesseractではなく埋め込まれた3D cubic cellです。2Dはsegment、3Dはsquareとして表示します。床専用の投影処理は既存のcamera/near-far clip/perspectiveを使い、投影した6面を三角形化して専用Meshへ渡します。safe=青、hazard=赤。床はNaturalの対象外で、既存物体のVisibility判定は変更しません。
-- 床Mesh以外の汎用solid renderer、厳密な4D occlusion、深度clipで切断した床の蓋、正確なTV境界での幾何切断は未実装です。gravity/jump、床・hazard衝突、death/restart、goal等のgame system、Slice、physics、PVTS、VR、WebGPUへは進みません。
+- 床Mesh以外の汎用solid renderer、厳密な4D occlusion、深度clipで切断した床の蓋、正確なTV境界での幾何切断は未実装です。床タイル・hazard衝突、death/restart、goal等のgame system、Slice、汎用physics、PVTS、VR、WebGPUへは進みません。
