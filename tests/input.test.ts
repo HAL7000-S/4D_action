@@ -1,6 +1,6 @@
 ﻿import { expect, it } from 'vitest';
 import { advanceCamera, codes, playerCodes, speeds, movement, createInputModel } from '../src/ui/inputMapping';
-import { defaultState } from '../src/ui/state';
+import { defaultState as initialState } from '../src/ui/state';
 
 it('starts in observer3d and toggles once per Slash press', () => {
   const input = createInputModel();
@@ -111,3 +111,6 @@ it('TPS facing follows the shortest turn at consistent rates and stops on releas
     results[0].forEach((row,i) => row.forEach((v,j) => expect(v).toBeCloseTo(results[2][i][j],9)));
   }
 });
+
+// These existing scenarios explicitly exercise flight/X-Ray, independent of startup defaults.
+function defaultState(): ReturnType<typeof initialState> { return { ...initialState(), motionMode: 'flight' as const, visibilityMode: 'XRay' as const }; }

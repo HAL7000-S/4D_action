@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import type { ProjectedFloor } from '../projection/projectFloor';
 
-export const floorColors = { safe: 0x2563eb, hazard: 0xef4444 } as const;
+export const floorColors = { safe: 0x2563eb, hazard: 0xef4444, gray: 0x888888 } as const;
 /** Floor-only mesh renderer. Receives projected xyz, never 4D coordinates. */
 export function createFloorView(scene: THREE.Scene, clippingPlanes: THREE.Plane[]) {
   const group = new THREE.Group(); group.name = 'floorStage'; scene.add(group);
-  const entries = (['safe', 'hazard'] as const).map(type => {
+  const entries = (['safe', 'hazard', 'gray'] as const).map(type => {
     const triangles = new THREE.BufferGeometry(), segments = new THREE.BufferGeometry();
     for (const geometry of [triangles, segments]) geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
     const meshMaterial = new THREE.MeshBasicMaterial({ color: floorColors[type], side: THREE.DoubleSide, clippingPlanes,
@@ -27,7 +27,14 @@ export function createFloorView(scene: THREE.Scene, clippingPlanes: THREE.Plane[
     update(tiles: readonly ProjectedFloor[]) {
       for (const e of entries) {
         const matching = tiles.filter(t => t.type === e.type);
-        updateBuffer(e.triangles, matching.flatMap(t => t.triangles.flatMap(p => [...p])));
+        const values = matching.flatMap(t => t.triangles.flatMap(p => [...p]));
+        if(e.type==='gray') for(const tile of matching) for(let i=0;i+1<tile.segments.length;i+=2) {
+          // 1D intrinsic floor rendered as a narrow TV-space strip (WebGL line
+          // width is platform-dependent). Thickness is visual, not world geometry.
+          const a=tile.segments[i],b=tile.segments[i+1],h=.015;
+          values.push(a[0],a[1]-h,a[2],b[0],b[1]-h,b[2],b[0],b[1]+h,b[2],a[0],a[1]-h,a[2],b[0],b[1]+h,b[2],a[0],a[1]+h,a[2]);
+        }
+        updateBuffer(e.triangles, values);
         updateBuffer(e.segments, matching.flatMap(t => t.segments.flatMap(p => [...p])));
       }
     },

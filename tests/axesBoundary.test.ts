@@ -2,7 +2,7 @@
 import { basis4D, worldAxes, basisDirections, projectGizmo, projectWorldAxes } from '../src/projection/basisAxes';
 import { identity, transform } from '../src/math/matrix4';
 import { composeRotation } from '../src/math/rotation4d';
-import { defaultState } from '../src/ui/state';
+import { defaultState as initialState } from '../src/ui/state';
 import { advanceCamera, playerCodes } from '../src/ui/inputMapping';
 import { constrainCameraPosition, roomHalfExtent, roomMargin } from '../src/ui/roomBoundary';
 import type { Vec4 } from '../src/math/vec4';
@@ -63,3 +63,6 @@ it('clamps rotated local movement in world coordinates', () => {
   expect(next.position[0]).toBe(limit); expect(next.position[3]).toBeGreaterThan(0);
   next.position.forEach(v => expect(Math.abs(v)).toBeLessThanOrEqual(limit));
 });
+
+// These existing scenarios explicitly exercise flight/X-Ray, independent of startup defaults.
+function defaultState(): ReturnType<typeof initialState> { return { ...initialState(), motionMode: 'flight' as const, visibilityMode: 'XRay' as const }; }

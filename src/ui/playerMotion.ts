@@ -1,6 +1,7 @@
 import type { CameraState } from './state';
 import type { Vec4 } from '../math/vec4';
 import { roomHalfExtent } from './roomBoundary';
+import { floorY } from '../geometry/grayFloor';
 
 export type MotionMode = 'flight' | 'gravity';
 // Player position is its center; feet are center.y - halfExtent.y.
@@ -12,8 +13,8 @@ export const feetHeight = (state: CameraState) => state.position[1] - playerHalf
 export function correctPlayerContact(state: CameraState): CameraState {
   if (state.motionMode !== 'gravity') return state;
   const position = state.position.map((v, i) => i < state.dimension
-    ? Math.max(-roomHalfExtent + playerHalfExtent[i], Math.min(roomHalfExtent - playerHalfExtent[i], v)) : v) as unknown as Vec4;
-  const grounded = position[1] <= -roomHalfExtent + playerHalfExtent[1] + 1e-9;
+    ? Math.max((i === 1 ? floorY : -roomHalfExtent) + playerHalfExtent[i], Math.min(roomHalfExtent - playerHalfExtent[i], v)) : v) as unknown as Vec4;
+  const grounded = position[1] <= floorY + playerHalfExtent[1] + 1e-9;
   const ceiling = position[1] >= roomHalfExtent - playerHalfExtent[1] - 1e-9;
   const verticalVelocity = (grounded && state.verticalVelocity < 0) || (ceiling && state.verticalVelocity > 0) ? 0 : state.verticalVelocity;
   return { ...state, position, grounded, verticalVelocity };

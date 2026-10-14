@@ -16,6 +16,7 @@ export function createControls(panel: HTMLElement, viewport: HTMLElement, onChan
     <label>Invert Y<input type="checkbox" name="invertY" data-group="look"></label>
     <label>Free Flight<input type="radio" name="motion-mode" value="flight" data-group="motion"></label>
     <label>Gravity<input type="radio" name="motion-mode" value="gravity" data-group="motion"></label></fieldset>
+    <label>Gray world floor<input type="checkbox" name="grayFloorVisible" data-group="floor"></label><p>Player World floor y = -1; hiding its image does not disable ground contact.</p>
     <fieldset><legend>Position（世界座標）</legend>${axes.map(a => field('position', a, .1)).join('')}</fieldset>
     <button type="button" id="floor-preview">Look at floor</button><p>Floor: blue = safe / red = hazard (display only)</p>
     <fieldset><legend>Rotation（degree）</legend>${planes.map(p => field('rotation', p, 1)).join('')}</fieldset>
@@ -40,7 +41,8 @@ export function createControls(panel: HTMLElement, viewport: HTMLElement, onChan
       input.disabled = group === 'position' ? axes.indexOf(input.name as typeof axes[number]) >= state.dimension
         : group === 'rotation' ? state.viewMode === 'tps' || [...input.name.toLowerCase()].some(a => axes.indexOf(a as typeof axes[number]) >= state.dimension) : false;
       input.setCustomValidity('');
-      if (group === 'look') input.checked = state.invertY;
+      if (group === 'floor') input.checked = state.grayFloorVisible;
+      else if (group === 'look') input.checked = state.invertY;
       else if (group === 'motion') input.checked = input.value === state.motionMode;
       else if (group === 'mode') input.checked = input.value === state.visibilityMode;
       else if (group === 'visible') input.checked = state.visible[input.name as ObjectId];
@@ -63,7 +65,8 @@ export function createControls(panel: HTMLElement, viewport: HTMLElement, onChan
     if (!(target instanceof HTMLInputElement)) return;
     const next: CameraState = { ...state, position: [...state.position], angles: { ...state.angles }, projection: { ...state.projection }, visible: { ...state.visible } };
     const group = target.dataset.group, value = target.valueAsNumber;
-    if (group === 'look') next.invertY = target.checked;
+    if (group === 'floor') next.grayFloorVisible = target.checked;
+    else if (group === 'look') next.invertY = target.checked;
     else if (group === 'motion') Object.assign(next, setMotionMode(state, target.value === 'gravity' ? 'gravity' : 'flight'));
     else if (group === 'mode') next.visibilityMode = target.value === 'Natural' ? 'Natural' : 'XRay';
     else if (group === 'visible') next.visible[target.name as ObjectId] = target.checked;
@@ -80,7 +83,7 @@ export function createControls(panel: HTMLElement, viewport: HTMLElement, onChan
     const draft = target.value;
     commit(next);
     if (group === 'position') target.value = String(state.position[axes.indexOf(target.name as typeof axes[number])]);
-    else if (!['visible','mode','motion','look'].includes(group ?? '')) target.value = draft;
+    else if (!['visible','mode','motion','look','floor'].includes(group ?? '')) target.value = draft;
   };
   const choose = (event: Event) => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('button');

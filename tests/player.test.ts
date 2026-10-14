@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PerspectiveCamera } from 'three';
-import { defaultState, resetCamera, setDimension, setViewMode, projectScene } from '../src/ui/state';
+import { defaultState as initialState, resetCamera, setDimension, setViewMode, projectScene } from '../src/ui/state';
 import { advanceCamera, codes, playerCodes, createInputModel } from '../src/ui/inputMapping';
 import { activeAngles, playerPose, playerViewCamera, projectPlayerWorld } from '../src/projection/playerCamera';
 import { dimensionWorld, playerBoundaries, playerShape } from '../src/geometry/playerGeometry';
@@ -124,3 +124,6 @@ describe('Player geometry and camera pipeline', () => {
     expect(projected.edges[0].end[0]).toBeCloseTo(.25);
   });
 });
+
+// These existing scenarios explicitly exercise flight/X-Ray, independent of startup defaults.
+function defaultState(): ReturnType<typeof initialState> { return { ...initialState(), motionMode: 'flight' as const, visibilityMode: 'XRay' as const }; }

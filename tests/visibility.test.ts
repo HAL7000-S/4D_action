@@ -3,7 +3,7 @@ import { cellHyperplanes, isCellVisible, filterBackCells } from '../src/visibili
 import { createTesseract } from '../src/geometry/tesseract';
 import { createSimplex4D } from '../src/geometry/simplex4d';
 import { createRoom4D } from '../src/geometry/room4d';
-import { defaultState, projectScene, resetCamera } from '../src/ui/state';
+import { defaultState as initialState, projectScene, resetCamera } from '../src/ui/state';
 import { projectGeometry } from '../src/projection/projectedGeometry';
 import { identity, transform } from '../src/math/matrix4';
 import { composeRotation } from '../src/math/rotation4d';
@@ -88,3 +88,6 @@ it.each([2,3] as const)('culls intrinsic %iD boundaries and retains room/mode', 
   expect(setDimension({...state,visibilityMode:'Natural'},4).visibilityMode).toBe('Natural');
   expect(dimensionWorld('simplex',dimension).vertices.length).toBe(dimension+1);
 });
+
+// These existing scenarios explicitly exercise flight/X-Ray, independent of startup defaults.
+function defaultState(): ReturnType<typeof initialState> { return { ...initialState(), motionMode: 'flight' as const, visibilityMode: 'XRay' as const }; }

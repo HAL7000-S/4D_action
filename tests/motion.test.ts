@@ -1,5 +1,6 @@
+import { floorY } from '../src/geometry/grayFloor';
 import { expect, it } from 'vitest';
-import { defaultState, setDimension, setViewMode, resetCamera, validState } from '../src/ui/state';
+import { defaultState as initialState, setDimension, setViewMode, resetCamera, validState } from '../src/ui/state';
 import { advanceCamera, lookCodes, playerCodes, speeds } from '../src/ui/inputMapping';
 import { advancePlayerMotion, correctPlayerContact, feetHeight, setMotionMode, jumpSpeed, playerHalfExtent } from '../src/ui/playerMotion';
 import { roomHalfExtent } from '../src/ui/roomBoundary';
@@ -37,7 +38,7 @@ it.each([2,3,4] as const)('falls and lands using Player feet in %iD, independent
   for (const view of ['fps','tps'] as const) {
     let state = setMotionMode(setViewMode(setDimension(defaultState(),dimension),view),'gravity');
     for (let i=0;i<180;i++) state=advanceCamera(state,new Set(),1/60,[0,0],'observer3d');
-    expect(feetHeight(state)).toBeCloseTo(-roomHalfExtent);
+    expect(feetHeight(state)).toBeCloseTo(floorY);
     expect(state.grounded).toBe(true); expect(state.verticalVelocity).toBe(0);
   }
 });
@@ -59,7 +60,7 @@ it('stops upward velocity at the ceiling and slides along active walls', () => {
   const state=correctPlayerContact({...defaultState(),motionMode:'gravity',position:[10,-10,0,0]});
   const next=advanceCamera(state,new Set([playerCodes.right,playerCodes.forward]),.1,[0,0],'camera4d');
   expect(next.position[0]).toBe(4.6); expect(next.position[3]).toBeGreaterThan(0);
-  expect(next.position[1]).toBe(-4.6);
+  expect(next.position[1]).toBe(floorY + playerHalfExtent[1]);
 });
 it('retains inactive coordinates and safely corrects newly activated boundaries', () => {
   const state=correctPlayerContact({...setDimension(defaultState(),2),motionMode:'gravity',position:[0,0,8,-9]});
@@ -70,20 +71,20 @@ it('retains inactive coordinates and safely corrects newly activated boundaries'
   expect(resetCamera(four).motionMode).toBe('gravity');
 });
 it('switches modes without stale velocity or a held-Space jump and restores flight ascent', () => {
-  const gravity=setMotionMode({...defaultState(),position:[0,-4.6,0,0]},'gravity');
+  const gravity=setMotionMode({...defaultState(),position:[0,floorY+playerHalfExtent[1],0,0]},'gravity');
   expect(advancePlayerMotion(gravity,.01,true).grounded).toBe(true);
   const flight=setMotionMode({...gravity,verticalVelocity:4},'flight');
   expect(flight.verticalVelocity).toBe(0); expect(flight.grounded).toBe(false);
-  expect(advanceCamera(flight,new Set(['Space']),.1,[0,0],'camera4d').position[1]).toBeCloseTo(-4.4);
+  expect(advanceCamera(flight,new Set(['Space']),.1,[0,0],'camera4d').position[1]).toBeCloseTo(floorY+playerHalfExtent[1]+.2);
   expect(advanceCamera(defaultState(),new Set(['ShiftLeft']),.1,[0,0],'camera4d').position[1]).toBeCloseTo(-.2);
 });
 it('integrates gravity consistently across frame rates and rejects nonfinite dt', () => {
   const ys=[30,60,144].map(fps => {
-    let state=setMotionMode(defaultState(),'gravity');
+    let state=setMotionMode({...defaultState(),position:[0,2,0,-3]},'gravity');
     for(let i=0;i<fps/2;i++) state=advancePlayerMotion(state,1/fps,false);
     expect(validState(state)).toBe(true); return state.position[1];
   });
-  ys.forEach(y=>expect(y).toBeCloseTo(-1.125,10));
+  ys.forEach(y=>expect(y).toBeCloseTo(2-1.125,10));
   const state=setMotionMode(defaultState(),'gravity');
   expect(advancePlayerMotion(state,NaN,false)).toBe(state);
 });
@@ -102,3 +103,6 @@ it.each([2,3,4] as const)('builds sparse colored intrinsic %iD boundary lines us
   });
   expect(grids.flatMap(g=>g.edges).length).toBeLessThan(250);
 });
+
+// These existing scenarios explicitly exercise flight/X-Ray, independent of startup defaults.
+function defaultState(): ReturnType<typeof initialState> { return { ...initialState(), motionMode: 'flight' as const, visibilityMode: 'XRay' as const }; }

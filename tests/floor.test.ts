@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { floorGeometry, floorStage, type FloorTile4D } from '../src/geometry/floorTile';
 import { clipFloorFace, projectFloor } from '../src/projection/projectFloor';
 import { createFloorView, floorColors } from '../src/renderer/floorView';
-import { defaultState, lookAtFloor, resetCamera, setDimension, setViewMode } from '../src/ui/state';
+import { defaultState as initialState, lookAtFloor, resetCamera, setDimension, setViewMode } from '../src/ui/state';
 import { advanceCamera, playerCodes, codes, movement } from '../src/ui/inputMapping';
 import { playerPose, playerViewCamera } from '../src/projection/playerCamera';
 import { projectAvatar } from '../src/projection/playerAvatar';
@@ -78,14 +78,14 @@ describe('floor geometry, projection and mesh data', () => {
     const view = createFloorView(scene, planes);
     view.update(floorStage(4).map(t => projectFloor(t, defaultState())));
     const group = scene.getObjectByName('floorStage')!;
-    const meshes = group.children.filter(o => o instanceof THREE.Mesh) as THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>[];
+    const meshes = group.children.filter(o => o instanceof THREE.Mesh && o.material.color.getHex() !== floorColors.gray) as THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>[];
     expect(meshes).toHaveLength(2);
     expect(meshes.map(m => m.material.color.getHex())).toEqual([floorColors.safe, floorColors.hazard]);
     meshes.forEach(mesh => { expect(mesh.material.clippingPlanes).toBe(planes); expect(mesh.material.side).toBe(THREE.DoubleSide); expect(mesh.geometry.drawRange.count).toBeGreaterThan(0); });
     const state = lookAtFloor(setDimension(defaultState(), 2));
     view.update(floorStage(2).map(t => projectFloor(t, state)));
     meshes.forEach(mesh => expect(mesh.geometry.drawRange.count).toBe(0));
-    const lines = group.children.filter(o => o instanceof THREE.LineSegments) as THREE.LineSegments[];
+    const lines = group.children.filter(o => o instanceof THREE.LineSegments && o.material.color.getHex() !== floorColors.gray) as THREE.LineSegments[];
     expect(lines.every(l => l.geometry.drawRange.count > 0)).toBe(true);
     view.dispose(); expect(scene.getObjectByName('floorStage')).toBeUndefined();
   });
@@ -134,3 +134,6 @@ describe('ground input and independent TPS orbit', () => {
     expect(advanceCamera(tps, new Set([playerCodes.forward]), 1, [99,99], 'observer3d')).toBe(tps);
   });
 });
+
+// These existing scenarios explicitly exercise flight/X-Ray, independent of startup defaults.
+function defaultState(): ReturnType<typeof initialState> { return { ...initialState(), motionMode: 'flight' as const, visibilityMode: 'XRay' as const }; }

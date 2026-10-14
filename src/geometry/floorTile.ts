@@ -1,7 +1,7 @@
 import type { Vec4 } from '../math/vec4';
 import type { PlayerDimension } from '../projection/playerCamera';
 
-export type FloorType = 'safe' | 'hazard';
+export type FloorType = 'safe' | 'hazard' | 'gray';
 export interface FloorTile4D {
   readonly type: FloorType;
   readonly x: readonly [number, number];

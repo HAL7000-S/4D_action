@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { defaultVolume, fov4D, clampObserver, observerRoomHalfSize } from '../src/ui/observerState';
-import { defaultState, resetCamera } from '../src/ui/state';
+import { defaultState as initialState, resetCamera } from '../src/ui/state';
 
 it('computes the symmetric 4D field of view in radians', () => {
   expect(fov4D(3, 3)).toBeCloseTo(Math.PI / 2, 12);
@@ -20,3 +20,6 @@ it('keeps projection volume separate from 4D reset', () => {
   expect(resetCamera(camera).position).toEqual([0, 0, 0, -3]);
   expect(volume.h).toBe(8);
 });
+
+// These existing scenarios explicitly exercise flight/X-Ray, independent of startup defaults.
+function defaultState(): ReturnType<typeof initialState> { return { ...initialState(), motionMode: 'flight' as const, visibilityMode: 'XRay' as const }; }

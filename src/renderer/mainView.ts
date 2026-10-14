@@ -1,4 +1,5 @@
 import { createFloorView } from './floorView';
+import { createCreativeView } from './creativeView';
 import { createAxisDisplay } from './axisDisplay';
 import type { ProjectedAxis } from '../projection/basisAxes';
 import type { InputState } from '../ui/inputMapping';
@@ -52,6 +53,7 @@ export function createMainView(container: HTMLElement, objects: readonly ViewObj
   grid.position.y = -observerRoomHalfSize; observerRoom3D.add(grid); scene.add(observerRoom3D);
   resources.push(grid.geometry, ...(Array.isArray(grid.material) ? grid.material : [grid.material]));
   const floorView = createFloorView(scene, clipPlanes);
+  const creativeView = createCreativeView(scene, clipPlanes);
   const worldAxes = createAxisDisplay(scene, clipPlanes);
   const hudScene = new THREE.Scene();
   const hudAxes = createAxisDisplay(hudScene);
@@ -99,6 +101,7 @@ export function createMainView(container: HTMLElement, objects: readonly ViewObj
   };
   return {
     updateFloor: floorView.update,
+    updateCreative: creativeView.update,
     updateAxes(world: readonly (ProjectedAxis | null)[], hud: readonly (ProjectedAxis | null)[]) { worldAxes.update(world); hudAxes.update(hud); },
     setInputUpdate(update: (dt: number) => void) { updateInput = update; },
     update(geometries: readonly ProjectedGeometry[]) {
@@ -115,7 +118,7 @@ export function createMainView(container: HTMLElement, objects: readonly ViewObj
     dispose() {
     observer.disconnect();
     renderer.setAnimationLoop(null);
-    controls.dispose(); floorView.dispose(); worldAxes.dispose(); hudAxes.dispose();
+    controls.dispose(); floorView.dispose(); creativeView.dispose(); worldAxes.dispose(); hudAxes.dispose();
     resources.forEach(resource => resource.dispose());
     renderer.dispose();
     renderer.domElement.remove();

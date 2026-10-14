@@ -11,6 +11,7 @@ export const axes = ['x', 'y', 'z', 'w'] as const;
 export const objectIds = ['room', 'tesseract', 'simplex'] as const;
 export type ObjectId = typeof objectIds[number];
 export interface PlayerCamera {
+  grayFloorVisible: boolean;
   invertY: boolean;
   motionMode: MotionMode;
   verticalVelocity: number;
@@ -33,12 +34,12 @@ export const setViewMode = (state: CameraState, viewMode: ViewMode): CameraState
 export const toRadians = (degrees: number) => degrees * (Math.PI / 180);
 export const toDegrees = (radians: number) => radians * (180 / Math.PI);
 export function defaultState(): CameraState {
-  return { invertY: false, motionMode: 'flight', verticalVelocity: 0, grounded: false, jumpHeld: false, dimension: 4, viewMode: 'fps', position: [0, 0, 0, -3], angles: { XY: 0, XZ: 0, XW: 0, YZ: 0, YW: 0, ZW: 0 },
+  return { grayFloorVisible: true, invertY: false, motionMode: 'gravity', verticalVelocity: 0, grounded: false, jumpHeld: false, dimension: 4, viewMode: 'fps', position: [0, 0, 0, -3], angles: { XY: 0, XZ: 0, XW: 0, YZ: 0, YW: 0, ZW: 0 },
     tpsLookAngles: { XY: 0, XZ: 0, XW: 0, YZ: 0, YW: 0, ZW: 0 },
-    projection: { focalLength: 3, near: 2, far: 12 }, visible: { room: true, tesseract: true, simplex: true }, visibilityMode: 'XRay' };
+    projection: { focalLength: 3, near: 2, far: 12 }, visible: { room: true, tesseract: true, simplex: true }, visibilityMode: 'Natural' };
 }
 export function resetCamera(state: CameraState): CameraState {
-  return correctPlayerContact({ ...defaultState(), invertY: state.invertY, motionMode: state.motionMode, dimension: state.dimension, viewMode: state.viewMode, visible: { ...state.visible }, visibilityMode: state.visibilityMode });
+  return correctPlayerContact({ ...defaultState(), grayFloorVisible: state.grayFloorVisible, invertY: state.invertY, motionMode: state.motionMode, dimension: state.dimension, viewMode: state.viewMode, visible: { ...state.visible }, visibilityMode: state.visibilityMode });
 }
 /** Inspection shortcut; retains saved inactive angles and never rotates the TPS body. */
 export function lookAtFloor(state: CameraState): CameraState {
